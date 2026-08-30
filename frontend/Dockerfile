@@ -10,7 +10,7 @@ COPY . .
 RUN npm run build
 
 FROM node:20-alpine AS runner
-LABEL org.opencontainers.image.source=https://github.com/Max20050/ingsoft3
+LABEL org.opencontainers.image.source https://github.com/Max20050/ingsoft3
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/.next/standalone ./
