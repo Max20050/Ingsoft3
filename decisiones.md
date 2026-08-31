@@ -8,7 +8,7 @@ Para que el problema nunca hubiera aparecido lo que se puede hacer es traer los 
 El unico problema que tuve y se pueden ver en los commits es que me olvide de activar el ruleset entonces el primer commit si paso directo a produccion.
 despues active el ruleset y ya funciono.
 
-## 3. Declaración de uso de IA: qué partes hiciste con ayuda de inteligencia artificial y cómo verificaste lo que te devolvió (§ Uso de IA del enunciado).
+## 3. Declaración de uso de IA: qué partes hiciste con ayuda de inteligencia artificial y cómo verificaste lo que te devolvió.
 Hasta ahora no utlice la IA para mucho mas que buscar comandos.
 
 # Decisiones — TP2
@@ -36,3 +36,27 @@ Que persiste y que no?:
 Lo unico que persiste es el volumen de la base de datos de postgres. Este solo se borra si se hace de manera manual o si se agrega la flag -v en el docker compose down
 
 - Se utiliza el dns interno de docker compose.
+
+## 2. Qué problemas encontraste y cómo los solucionaste.
+No me encontre con muchos problemas ya que yo ya contaba con los Dockerfiles del proyecto, si tuve problemas con las creedenciales de github ya que no me dejaba iniciar sesion para subir las imagenes compiladas.
+
+## 3. Declaración de uso de IA: qué partes hiciste con ayuda de inteligencia artificial y cómo verificaste lo que te devolvió.
+Para este tp utilize a la IA como guia paso a paso para crear la imagenes y subirlas como package de github. Pude verifcar que lo que me daba estaba bien a traves de las consignas del tp ya que fui comparando paso a paso que todo estaba correcto.
+
+# Decisiones — TP3
+
+## 1. Decision tiempo de la sprint:
+Se decidio que la sprint va a durar 1 semana ya que esto es el tiempo en el cual se desarollan las actividades de la materia, un tp por semana. Por lo que el tiempo limite para desarollar el tp4 (teoricamente) es hasta el jueves 3 de septiembre.
+
+## Decision de la cantidad de tareas que se pueden hacer al mismo tiempo:
+Se decidio solo tener 2 tareas como maximo al mismo tiempo para que no se acumule trabajo sin terminar que el que peudo gestionar. Este numero viene de utlizar la regla de participantes + 1, este 1 nos permite tener flexibilidad opertiva ya que si ocurre un bloqueo o queremos preparan una tarea antes de terminal la que esta en progreso esto nos permite hacerlo.
+
+## Decision de las tareas para la HU-1:
+Yo ya tengo una implementacion de un workflow de CI en el repo orginal del proyecto [docuwave](https://github.com/max20050/DocuWave) por lo que la primer tarea para mi sera migrar ese archivo .yml al repo actual.
+Despues puse como segunda tarea crear un PR que cierre el Issue para verificar que la tarea pasa a done y la historia de usuario se completa.
+
+## 2. Qué problemas encontraste y cómo los solucionaste.
+En este tp no hubo problemas ya que segui la guia paso a paso e implemnte todo lo que pedia. 
+
+## 3. Declaración de uso de IA: qué partes hiciste con ayuda de inteligencia artificial y cómo verificaste lo que te devolvió.
+Para este tp no utilice la IA.
