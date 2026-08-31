@@ -124,3 +124,4 @@ repo antes de dar esto por válido.
 
 ## 6. Algunas cosas del tp3 las resolvi aca:
 La parte de generar un bug y resolverlo y que quede reflejada en el tablero la resolvi en este tp. Esto es para que se pueda aprovehcar ese bug y probar que el build falle y no nos deje mergear. Luego agrege el bug como issue, publique la solucion y lo cerre.
+![Build Fallando por error](capturas/build-fail.png)
