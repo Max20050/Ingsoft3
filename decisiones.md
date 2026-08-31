@@ -53,7 +53,7 @@ Se decidio solo tener 2 tareas como maximo al mismo tiempo para que no se acumul
 
 ## Decision de las tareas para la HU-1:
 Yo ya tengo una implementacion de un workflow de CI en el repo orginal del proyecto [docuwave](https://github.com/max20050/DocuWave) por lo que la primer tarea para mi sera migrar ese archivo .yml al repo actual.
-Despues puse como segunda tarea crear un PR que cierre el Issue para verificar que la tarea pasa a done y la historia de usuario se completa.
+Despues puse como segunda tarea agregar el badge del CI al readme.md
 
 ## 2. Qué problemas encontraste y cómo los solucionaste.
 En este tp no hubo problemas ya que segui la guia paso a paso e implemnte todo lo que pedia. 
@@ -114,9 +114,14 @@ no una aproximación. Si el CI compilara "a mano" con el toolchain del runner
 que el pipeline esté verde pero la imagen Docker real falle al construirse
 
 ## 4. Problemas encontrados y cómo los resolví:
+No fue un problema pero tuve que cambiar bastante la estructura de ci.yml ya que en docuwave yo no publico aun el package del build, si hago que pase los tests y pruebo que las imagenes compilen bien antes de mergear. Ademas borre algunas funcionalidades que no entran en este tp como publicar los resultados de los tests.
 
 ## 5. Declaración de uso de IA
 
 Usé Claude para generar un borrador inicial del ci.yml. Luego ajusté manualmente los nombres de los jobs, los paths de los Dockerfiles
 y verifiqué el comportamiento del cache corriendo el pipeline dos veces en mi propio
 repo antes de dar esto por válido.
+
+## 6. Algunas cosas del tp3 las resolvi aca:
+La parte de generar un bug y resolverlo y que quede reflejada en el tablero la resolvi en este tp. Esto es para que se pueda aprovehcar ese bug y probar que el build falle y no nos deje mergear. Luego agrege el bug como issue, publique la solucion y lo cerre.
+![Build Fallando por error](capturas/build-fail.png)
