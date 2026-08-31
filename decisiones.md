@@ -53,10 +53,74 @@ Se decidio solo tener 2 tareas como maximo al mismo tiempo para que no se acumul
 
 ## Decision de las tareas para la HU-1:
 Yo ya tengo una implementacion de un workflow de CI en el repo orginal del proyecto [docuwave](https://github.com/max20050/DocuWave) por lo que la primer tarea para mi sera migrar ese archivo .yml al repo actual.
-Despues puse como segunda tarea crear un PR que cierre el Issue para verificar que la tarea pasa a done y la historia de usuario se completa.
+Despues puse como segunda tarea agregar el badge del CI al readme.md
 
 ## 2. Qué problemas encontraste y cómo los solucionaste.
 En este tp no hubo problemas ya que segui la guia paso a paso e implemnte todo lo que pedia. 
 
 ## 3. Declaración de uso de IA: qué partes hiciste con ayuda de inteligencia artificial y cómo verificaste lo que te devolvió.
 Para este tp no utilice la IA.
+
+# Decisiones — TP4
+
+## 1. Estructura elegida del pipeline
+ 
+El workflow (`.github/workflows/ci.yml`) corre en cada Pull Request contra main y en
+cada push a main. Se definieron dos jobs independientes:
+ 
+- `build-backend`: construye la imagen del backend (Go) usando el Dockerfile de `backend/`.
+- `build-frontend`: construye la imagen del frontend (Next.js) usando el Dockerfile de `frontend/`.
+Son dos jobs porque la app tiene dos Dockerfiles reales (uno por componente). Cada imagen se construye con un proceso de build totalmente distinto (Go compila a un binario estático, Next.js
+necesita instalar dependencias de Node y correr un build de la aplicación), así que
+tiene sentido que sean pasos separados en vez de mezclarlos en un mismo job.
+ 
+Corren en paralelo porque no hay ningúna dependencia entre ellos para compilar. Esto además acorta el tiempo total del pipeline: en vez de sumar el tiempo de build de
+las dos imágenes, GitHub Actions las corre en runners simultáneos y el tiempo total es
+el del job más lento, no la suma de ambos.
+ 
+## 2. Qué cachea el pipeline
+ 
+Se usa el backend de cache de Buildx `type=gha` (cache nativa de GitHub Actions), con
+un `scope` separado por job (`scope=backend` y `scope=frontend`) para que no se pisen
+entre sí.
+ 
+**Qué se reutiliza:**
+- Las capas de dependencias que no cambiaron entre corridas. Por ejemplo, en el
+  backend, la capa de `go mod download` (o `go mod tidy`) se reutiliza si el
+  `go.mod`/`go.sum` no cambió. En el frontend, la capa de `npm install` /
+  `npm ci` se reutiliza si `package.json` / `package-lock.json` no cambiaron.
+- Cualquier capa intermedia del Dockerfile cuyo contexto de entrada (los archivos que
+  copia esa instrucción `COPY`) no haya sido modificado respecto a la corrida anterior.
+  Esas capas aparecen como `CACHED` en el log del build.
+**Qué NO se reutiliza:**
+- Las capas posteriores a la primera línea del Dockerfile que cambió. Docker cachea
+  capa por capa en orden: si cambia el código fuente (por ejemplo un `.go` o un `.tsx`),
+  todo lo que dependa de ese `COPY` en adelante se reconstruye (compilación del
+  binario, build de Next.js), aunque las dependencias de más arriba sigan cacheadas.
+- Si cambian `go.mod`/`go.sum` o `package.json`/`package-lock.json`, se invalida
+  también la capa de instalación de dependencias, y todo lo posterior a esa capa.
+**Qué pasa si el cache desaparece** (por ejemplo, expira, se borra manualmente, o es la
+primera corrida del workflow en el repo): el build simplemente corre completo, sin
+ningún `CACHED` en el log, exactamente igual que en un ambiente limpio. No rompe el
+pipeline ni el resultado del build; el único costo es que la corrida tarda más porque
+tiene que descargar dependencias y reconstruir todas las capas desde cero. La próxima
+corrida vuelve a poblar la cache normalmente.
+ 
+## 3. Por qué el pipeline construye con el Dockerfile en vez de compilar por su cuenta:
+
+La razón es que el pipeline tiene que verificar exactamente lo que se va a desplegar,
+no una aproximación. Si el CI compilara "a mano" con el toolchain del runner
+(su propia versión de Go o de Node, sus propias variables de entorno), podría pasar
+que el pipeline esté verde pero la imagen Docker real falle al construirse
+
+## 4. Problemas encontrados y cómo los resolví:
+No fue un problema pero tuve que cambiar bastante la estructura de ci.yml ya que en docuwave yo no publico aun el package del build, si hago que pase los tests y pruebo que las imagenes compilen bien antes de mergear. Ademas borre algunas funcionalidades que no entran en este tp como publicar los resultados de los tests.
+
+## 5. Declaración de uso de IA
+
+Usé Claude para generar un borrador inicial del ci.yml. Luego ajusté manualmente los nombres de los jobs, los paths de los Dockerfiles
+y verifiqué el comportamiento del cache corriendo el pipeline dos veces en mi propio
+repo antes de dar esto por válido.
+
+## 6. Algunas cosas del tp3 las resolvi aca:
+La parte de generar un bug y resolverlo y que quede reflejada en el tablero la resolvi en este tp. Esto es para que se pueda aprovehcar ese bug y probar que el build falle y no nos deje mergear. Luego agrege el bug como issue, publique la solucion y lo cerre.

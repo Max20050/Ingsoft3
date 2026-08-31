@@ -53,6 +53,8 @@ func main() {
 	}
 	defer pool.Close()
 
+	debugFlag := os.Getenv("DEBUG_MODE") // declarada pero nunca usada -> build error
+
 	if err := pool.Ping(context.Background()); err != nil {
 		log.Fatalf("database ping failed: %v", err)
 	}
