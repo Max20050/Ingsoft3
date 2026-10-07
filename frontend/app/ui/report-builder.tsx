@@ -23,7 +23,6 @@ import {
   type FieldMapping,
   type LLMConfig,
   type Operator,
-  type OperatorArity,
   type PlaceholderFilter,
   type QueryField,
   type QueryFilter,
@@ -44,19 +43,12 @@ import {
   numericColumns,
   type CustomTemplateDraft,
 } from "@/app/ui/template-picker";
+import { columnBadge, errorMessage, filterSummary, operatorArity, sameColumns } from "@/lib/report-builder-helpers";
 
 const inputClass = "rounded border border-black/[.1] px-3 py-2 dark:border-white/[.15] dark:bg-black";
 const smallInputClass = `${inputClass} py-1 text-sm`;
 const removeButtonClass =
   "rounded border border-black/[.1] px-2 py-1 text-xs transition-colors hover:bg-black/[.04] dark:border-white/[.15] dark:hover:bg-[#1a1a1a]";
-
-function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback;
-}
-
-function sameColumns(left: string[], right: string[]): boolean {
-  return left.length === right.length && left.every((column, index) => column === right[index]);
-}
 
 function hasAISummaryBlock(blocks: { kind: string }[] | undefined): boolean {
   return (blocks ?? []).some((b) => b.kind === "ai-summary");
@@ -95,10 +87,6 @@ function columnMetaFor(
     return columns;
   }
   return schema.tables?.find((candidate) => candidate.name === table)?.columns ?? [];
-}
-
-function operatorArity(operator: Operator): OperatorArity {
-  return OPERATORS.find((candidate) => candidate.value === operator)?.arity ?? "one";
 }
 
 // FormatPicker chooses the files the report is delivered as. A report needs at
@@ -147,16 +135,6 @@ function FormatPicker({
       })}
     </fieldset>
   );
-}
-
-// columnBadge shortens a schema column's declared type down to the same kind
-// of one-glyph hint the field picker shows next to each checkbox.
-function columnBadge(type: string | undefined): string {
-  const t = (type ?? "").toLowerCase();
-  if (/int|numeric|decimal|float|double|serial/.test(t)) return "123";
-  if (/date|time/.test(t)) return "\u{1F4C5}";
-  if (/bool/.test(t)) return "✓";
-  return "A";
 }
 
 // FieldPicker lists every column a table (or sheet) offers as a checkbox: on
@@ -430,6 +408,7 @@ function FilterEditor({
             ))}
           </select>
           <FilterValueInputs filter={filter} onChange={(next) => update(index, next)} />
+          <span className="sr-only">{filterSummary(filter)}</span>
           <button type="button" onClick={() => remove(index)} className={removeButtonClass}>
             Remove
           </button>
