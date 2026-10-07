@@ -42,22 +42,12 @@ services:
     build:
       context: ./frontend
       args:
-        # Relative so the browser calls through nginx on the same origin
-        # instead of baking in a host:port that only works outside Docker.
+        # Relative so the browser calls through nginx (en el mismo
+        # contenedor) en vez de hornear un host:puerto fijo.
         NEXT_PUBLIC_API_URL: ""
-    expose:
-      - "3000"
-    depends_on:
-      - backend
-
-  nginx:
-    image: nginx:1.27-alpine
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "80:80"
     depends_on:
-      - frontend
       - backend
 
 volumes:

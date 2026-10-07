@@ -76,8 +76,9 @@ Servicios:
 - App (vía nginx): http://localhost
 - PostgreSQL: `localhost:5432`
 
-Frontend y backend ya no publican sus puertos al host: nginx es el único punto de entrada y rutea
-`/api/*` al backend y el resto al frontend (ver [Arquitectura](#arquitectura)).
+El backend ya no publica su puerto al host. El contenedor del frontend corre nginx como reverse
+proxy delante del server de Next: nginx escucha en `:80`, rutea `/api/*` al backend y el resto al
+proceso de Next dentro del mismo contenedor (ver [Arquitectura](#arquitectura)).
 
 Las migraciones de base de datos corren solas al arrancar el backend, así que no hay ningún paso
 manual de setup de esquema.
@@ -146,30 +147,33 @@ cd frontend && npm run lint && npm run type-check
 ### Vista general
 
 ```
+                    ┌───────────────────────────────────────┐
+   navegador ─────▶ │  frontend (contenedor)           :80  │
+                    │  ┌───────────┐        ┌─────────────┐ │
+                    │  │  nginx    │  /     │  Next.js    │ │
+                    │  │  :80      ├───────▶│  :3000      │ │
+                    │  └─────┬─────┘        └─────────────┘ │
+                    └────────┼───────────────────────────────┘
+                              │ /api/*
+                              ▼
                     ┌──────────────────────────┐
-   navegador ─────▶ │  nginx                   │  :80
-                    │  reverse proxy único     │
+                    │  backend  (Go)           │  :8080
+                    │  net/http ServeMux+CORS  │
                     └────┬────────────────┬────┘
-                         │ /              │ /api/*
+                         │                │
+              pgx pool   │                │  conectores salientes
                          ▼                ▼
-          ┌──────────────────────────┐  ┌──────────────────────────┐
-          │  frontend  (Next.js)     │  │  backend  (Go)           │
-          │  App Router + Tailwind   │  │  net/http ServeMux+CORS  │
-          └──────────────────────────┘  └────┬────────────────┬────┘
-                                              │                │
-                                   pgx pool   │                │  conectores salientes
-                                              ▼                ▼
-                                      ┌───────────────┐   ┌──────────────────────────────┐
-                                      │ PostgreSQL 17 │   │ Fuentes del usuario:         │
-                                      │ (estado app)  │   │ Postgres · MySQL · Sheets ·  │
-                                      └───────────────┘   │ API REST · proveedores LLM   │
-                                                           └──────────────────────────────┘
+                 ┌───────────────┐   ┌──────────────────────────────┐
+                 │ PostgreSQL 17 │   │ Fuentes del usuario:         │
+                 │ (estado app)  │   │ Postgres · MySQL · Sheets ·  │
+                 └───────────────┘   │ API REST · proveedores LLM   │
+                                     └──────────────────────────────┘
 ```
 
-Los cuatro servicios corren en contenedores separados dentro de un mismo `docker-compose.yml`, con
-la arquitectura pensada para poder migrar a Kubernetes más adelante. `frontend` y `backend` no
-publican puertos al host: solo son alcanzables entre contenedores, y `nginx` es el único punto de
-entrada expuesto.
+Los tres servicios (frontend, backend, db) corren en contenedores separados dentro de un mismo
+`docker-compose.yml`. Dentro del contenedor `frontend`, nginx hace de reverse proxy: escucha en
+`:80`, sirve `/api/*` reenviando al contenedor `backend` y todo lo demás al proceso de Next.js
+(`:3000`) corriendo en el mismo contenedor. El backend no publica su puerto al host.
 
 ### Backend (`backend/`)
 
@@ -204,7 +208,9 @@ Next.js con App Router. Las páginas autenticadas viven en el route group `app/(
 (dashboard, datasources, reports, recipients, settings) y comparten el layout con la sidebar; el
 login, el registro y el callback de OAuth quedan fuera de ese grupo. `lib/api.ts` centraliza las
 llamadas al backend y `lib/auth-context.tsx` mantiene la sesión. Los componentes de UI están en
-`app/ui/`. La imagen de producción usa el output `standalone` de Next.
+`app/ui/`. La imagen de producción usa el output `standalone` de Next, y la etapa final del
+`Dockerfile` arranca ese server junto con nginx (`frontend/nginx/default.conf`,
+`frontend/docker-entrypoint.sh`), que es quien expone `:80` y reenvía `/api/*` al backend.
 
 ### Base de datos
 
