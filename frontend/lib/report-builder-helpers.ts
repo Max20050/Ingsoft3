@@ -1,7 +1,7 @@
 // Pure logic pulled out of app/ui/report-builder.tsx so it can be unit
 // tested without rendering the component: no DOM, no fetch, no React state.
 
-import type { Operator, OperatorArity } from "@/lib/api";
+import type { Operator, OperatorArity, QueryFilter } from "@/lib/api";
 import { OPERATORS } from "@/lib/api";
 
 // errorMessage extracts a user-facing message from whatever a failed request
@@ -33,4 +33,26 @@ export function columnBadge(type: string | undefined): string {
   if (/date|time/.test(t)) return "\u{1F4C5}";
   if (/bool/.test(t)) return "✓";
   return "A";
+}
+
+// filterSummary turns a filter row into the plain-language sentence a
+// screen reader announces for it, since the row itself is just a handful of
+// unlabelled selects and inputs sitting side by side.
+export function filterSummary(filter: QueryFilter): string {
+  const operatorLabel = OPERATORS.find((candidate) => candidate.value === filter.operator)?.label ?? filter.operator;
+
+  switch (operatorArity(filter.operator)) {
+    case "none":
+      return `${filter.column} ${operatorLabel}`;
+    case "pair": {
+      const [from, to] = filter.values ?? [];
+      return `${filter.column} between ${from ?? "?"} and ${to ?? "?"}`;
+    }
+    case "many":
+      return `${filter.column} in ${(filter.values ?? []).join(", ")}`;
+    case "count":
+      return `${filter.column} in the last ${filter.value ?? "?"} days`;
+    default:
+      return `${filter.column} ${operatorLabel} ${filter.value ?? "?"}`;
+  }
 }

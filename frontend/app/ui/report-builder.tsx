@@ -43,7 +43,7 @@ import {
   numericColumns,
   type CustomTemplateDraft,
 } from "@/app/ui/template-picker";
-import { columnBadge, errorMessage, operatorArity, sameColumns } from "@/lib/report-builder-helpers";
+import { columnBadge, errorMessage, filterSummary, operatorArity, sameColumns } from "@/lib/report-builder-helpers";
 
 const inputClass = "rounded border border-black/[.1] px-3 py-2 dark:border-white/[.15] dark:bg-black";
 const smallInputClass = `${inputClass} py-1 text-sm`;
@@ -408,6 +408,7 @@ function FilterEditor({
             ))}
           </select>
           <FilterValueInputs filter={filter} onChange={(next) => update(index, next)} />
+          <span className="sr-only">{filterSummary(filter)}</span>
           <button type="button" onClick={() => remove(index)} className={removeButtonClass}>
             Remove
           </button>
