@@ -53,8 +53,7 @@ Variables principales:
 | `JWT_SECRET` | Firma de los tokens de sesión |
 | `DATASOURCE_ENCRYPTION_KEY` | Clave AES para cifrar las credenciales de las fuentes de datos |
 | `LLM_ENCRYPTION_KEY` | Clave AES para cifrar las API keys de los proveedores de LLM |
-| `FRONTEND_URL` | Origen permitido por CORS |
-| `NEXT_PUBLIC_API_URL` | URL del backend que consume el frontend |
+| `FRONTEND_URL` | Origen permitido por CORS (el de nginx, no el del frontend directamente) |
 | `AI_SUMMARY_ENABLED` | Habilita los bloques de resumen por IA (apagado por defecto) |
 
 `DATASOURCE_ENCRYPTION_KEY` y `LLM_ENCRYPTION_KEY` deben ser claves de 32 bytes en base64. Se
@@ -74,9 +73,11 @@ docker compose up -d --build
 
 Servicios:
 
-- Frontend: http://localhost:3000
-- Backend: http://localhost:8080 (healthcheck en http://localhost:8080/health)
+- App (vía nginx): http://localhost
 - PostgreSQL: `localhost:5432`
+
+Frontend y backend ya no publican sus puertos al host: nginx es el único punto de entrada y rutea
+`/api/*` al backend y el resto al frontend (ver [Arquitectura](#arquitectura)).
 
 Las migraciones de base de datos corren solas al arrancar el backend, así que no hay ningún paso
 manual de setup de esquema.
@@ -117,6 +118,11 @@ go run .
 > El backend carga el archivo `.env` ubicado en `../../.env` respecto del directorio actual, por eso
 > se ejecuta desde `backend/cmd/api` con un `.env` en `backend/`. Como alternativa, exportá las
 > variables en la shell antes de correrlo.
+>
+> Los valores por defecto de `FRONTEND_URL`, `GOOGLE_REDIRECT_URL` y `GOOGLE_SHEETS_REDIRECT_URL`
+> en `.env.example` asumen que se entra por nginx en `http://localhost`. Corriendo el backend
+> suelto (sin nginx de por medio) hay que apuntarlos directo al puerto del backend, por ejemplo
+> `http://localhost:8080/api/auth/google/callback`.
 
 Frontend:
 
@@ -141,27 +147,29 @@ cd frontend && npm run lint && npm run type-check
 
 ```
                     ┌──────────────────────────┐
-   navegador ─────▶ │  frontend  (Next.js)     │  :3000
-                    │  App Router + Tailwind   │
-                    └────────────┬─────────────┘
-                                 │ HTTP / JSON  (JWT en Authorization)
-                                 ▼
-                    ┌──────────────────────────┐
-                    │  backend  (Go)           │  :8080
-                    │  net/http ServeMux+CORS  │
+   navegador ─────▶ │  nginx                   │  :80
+                    │  reverse proxy único     │
                     └────┬────────────────┬────┘
-                         │                │
-              pgx pool   │                │  conectores salientes
+                         │ /              │ /api/*
                          ▼                ▼
-                 ┌───────────────┐   ┌──────────────────────────────┐
-                 │ PostgreSQL 17 │   │ Fuentes del usuario:         │
-                 │ (estado app)  │   │ Postgres · MySQL · Sheets ·  │
-                 └───────────────┘   │ API REST · proveedores LLM   │
-                                     └──────────────────────────────┘
+          ┌──────────────────────────┐  ┌──────────────────────────┐
+          │  frontend  (Next.js)     │  │  backend  (Go)           │
+          │  App Router + Tailwind   │  │  net/http ServeMux+CORS  │
+          └──────────────────────────┘  └────┬────────────────┬────┘
+                                              │                │
+                                   pgx pool   │                │  conectores salientes
+                                              ▼                ▼
+                                      ┌───────────────┐   ┌──────────────────────────────┐
+                                      │ PostgreSQL 17 │   │ Fuentes del usuario:         │
+                                      │ (estado app)  │   │ Postgres · MySQL · Sheets ·  │
+                                      └───────────────┘   │ API REST · proveedores LLM   │
+                                                           └──────────────────────────────┘
 ```
 
-Los tres servicios corren en contenedores separados dentro de un mismo `docker-compose.yml`, con la
-arquitectura pensada para poder migrar a Kubernetes más adelante.
+Los cuatro servicios corren en contenedores separados dentro de un mismo `docker-compose.yml`, con
+la arquitectura pensada para poder migrar a Kubernetes más adelante. `frontend` y `backend` no
+publican puertos al host: solo son alcanzables entre contenedores, y `nginx` es el único punto de
+entrada expuesto.
 
 ### Backend (`backend/`)
 
