@@ -2,16 +2,22 @@
 .env
 .env.local
 .env.*.local
-scripts
+/scripts
 
 # Go
 backend/vendor/
 backend/tmp/
+backend/coverage.out
+backend/coveragereport/
 
 # Next.js
 frontend/.next/
 frontend/out/
 frontend/node_modules/
+
+# CI coverage output, generated locally if you mirror the docker run steps by hand
+/backend-coverage/
+/frontend-coverage/
 
 # OS
 .DS_Store

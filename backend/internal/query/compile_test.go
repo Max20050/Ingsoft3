@@ -213,6 +213,25 @@ func TestCompileRelativeDateWindows(t *testing.T) {
 	}
 }
 
+// "last N days" takes a whole number of days — a fractional one has no
+// meaning a date window can express, so it's rejected rather than silently
+// floored or rounded. Found via the coverage report (§3.0 exercise): wholeNumber
+// had every other branch exercised except this one.
+func TestCompileRejectsFractionalLastDays(t *testing.T) {
+	_, err := Compile(Spec{
+		Table:   "sales",
+		Fields:  []Field{{Column: "region"}},
+		Filters: []Filter{{Column: "closed_at", Operator: OpLastDays, Value: float64(7.5)}},
+	}, sqlSchema(), DialectPostgres, referenceTime)
+
+	if err == nil {
+		t.Fatal("Compile accepted a fractional day count, want an error")
+	}
+	if !strings.Contains(err.Error(), "needs a whole number of days") {
+		t.Errorf("got %v, want an error naming the value as not a whole number of days", err)
+	}
+}
+
 // Values arrive as JSON, and the column's declared type decides what they have
 // to become before they're bound.
 func TestCompileCoercesValuesToColumnTypes(t *testing.T) {

@@ -9,6 +9,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
+# ---- Etapa 3: tests (parte del build: ya tiene Node y las dependencias) ----
+FROM builder AS test
+ENTRYPOINT ["npm", "run", "test:ci"]
+
+# ---- Etapa 4: runner sirve la app standalone (ya la tenías, queda ÚLTIMA) ----
 FROM node:20-alpine AS runner
 LABEL org.opencontainers.image.source https://github.com/Max20050/ingsoft3
 WORKDIR /app
