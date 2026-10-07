@@ -24,7 +24,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       DATASOURCE_ENCRYPTION_KEY: ${DATASOURCE_ENCRYPTION_KEY}
       LLM_ENCRYPTION_KEY: ${LLM_ENCRYPTION_KEY}
-      FRONTEND_URL: http://localhost:3000
+      FRONTEND_URL: http://localhost
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL}
@@ -32,8 +32,8 @@ services:
       # estimator exists. Set AI_SUMMARY_ENABLED=true in .env to turn them on
       # locally.
       AI_SUMMARY_ENABLED: ${AI_SUMMARY_ENABLED:-false}
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     depends_on:
       db:
         condition: service_healthy
@@ -41,10 +41,12 @@ services:
   frontend:
     build:
       context: ./frontend
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8080
+      args:
+        # Relative so the browser calls through nginx (en el mismo
+        # contenedor) en vez de hornear un host:puerto fijo.
+        NEXT_PUBLIC_API_URL: ""
     ports:
-      - "3000:3000"
+      - "80:80"
     depends_on:
       - backend
 

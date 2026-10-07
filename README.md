@@ -53,8 +53,7 @@ Variables principales:
 | `JWT_SECRET` | Firma de los tokens de sesión |
 | `DATASOURCE_ENCRYPTION_KEY` | Clave AES para cifrar las credenciales de las fuentes de datos |
 | `LLM_ENCRYPTION_KEY` | Clave AES para cifrar las API keys de los proveedores de LLM |
-| `FRONTEND_URL` | Origen permitido por CORS |
-| `NEXT_PUBLIC_API_URL` | URL del backend que consume el frontend |
+| `FRONTEND_URL` | Origen permitido por CORS (el de nginx, no el del frontend directamente) |
 | `AI_SUMMARY_ENABLED` | Habilita los bloques de resumen por IA (apagado por defecto) |
 
 `DATASOURCE_ENCRYPTION_KEY` y `LLM_ENCRYPTION_KEY` deben ser claves de 32 bytes en base64. Se
@@ -74,9 +73,12 @@ docker compose up -d --build
 
 Servicios:
 
-- Frontend: http://localhost:3000
-- Backend: http://localhost:8080 (healthcheck en http://localhost:8080/health)
+- App (vía nginx): http://localhost
 - PostgreSQL: `localhost:5432`
+
+El backend ya no publica su puerto al host. El contenedor del frontend corre nginx como reverse
+proxy delante del server de Next: nginx escucha en `:80`, rutea `/api/*` al backend y el resto al
+proceso de Next dentro del mismo contenedor (ver [Arquitectura](#arquitectura)).
 
 Las migraciones de base de datos corren solas al arrancar el backend, así que no hay ningún paso
 manual de setup de esquema.
@@ -117,6 +119,11 @@ go run .
 > El backend carga el archivo `.env` ubicado en `../../.env` respecto del directorio actual, por eso
 > se ejecuta desde `backend/cmd/api` con un `.env` en `backend/`. Como alternativa, exportá las
 > variables en la shell antes de correrlo.
+>
+> Los valores por defecto de `FRONTEND_URL`, `GOOGLE_REDIRECT_URL` y `GOOGLE_SHEETS_REDIRECT_URL`
+> en `.env.example` asumen que se entra por nginx en `http://localhost`. Corriendo el backend
+> suelto (sin nginx de por medio) hay que apuntarlos directo al puerto del backend, por ejemplo
+> `http://localhost:8080/api/auth/google/callback`.
 
 Frontend:
 
@@ -140,12 +147,15 @@ cd frontend && npm run lint && npm run type-check
 ### Vista general
 
 ```
-                    ┌──────────────────────────┐
-   navegador ─────▶ │  frontend  (Next.js)     │  :3000
-                    │  App Router + Tailwind   │
-                    └────────────┬─────────────┘
-                                 │ HTTP / JSON  (JWT en Authorization)
-                                 ▼
+                    ┌───────────────────────────────────────┐
+   navegador ─────▶ │  frontend (contenedor)           :80  │
+                    │  ┌───────────┐        ┌─────────────┐ │
+                    │  │  nginx    │  /     │  Next.js    │ │
+                    │  │  :80      ├───────▶│  :3000      │ │
+                    │  └─────┬─────┘        └─────────────┘ │
+                    └────────┼───────────────────────────────┘
+                              │ /api/*
+                              ▼
                     ┌──────────────────────────┐
                     │  backend  (Go)           │  :8080
                     │  net/http ServeMux+CORS  │
@@ -160,8 +170,10 @@ cd frontend && npm run lint && npm run type-check
                                      └──────────────────────────────┘
 ```
 
-Los tres servicios corren en contenedores separados dentro de un mismo `docker-compose.yml`, con la
-arquitectura pensada para poder migrar a Kubernetes más adelante.
+Los tres servicios (frontend, backend, db) corren en contenedores separados dentro de un mismo
+`docker-compose.yml`. Dentro del contenedor `frontend`, nginx hace de reverse proxy: escucha en
+`:80`, sirve `/api/*` reenviando al contenedor `backend` y todo lo demás al proceso de Next.js
+(`:3000`) corriendo en el mismo contenedor. El backend no publica su puerto al host.
 
 ### Backend (`backend/`)
 
@@ -196,7 +208,9 @@ Next.js con App Router. Las páginas autenticadas viven en el route group `app/(
 (dashboard, datasources, reports, recipients, settings) y comparten el layout con la sidebar; el
 login, el registro y el callback de OAuth quedan fuera de ese grupo. `lib/api.ts` centraliza las
 llamadas al backend y `lib/auth-context.tsx` mantiene la sesión. Los componentes de UI están en
-`app/ui/`. La imagen de producción usa el output `standalone` de Next.
+`app/ui/`. La imagen de producción usa el output `standalone` de Next, y la etapa final del
+`Dockerfile` arranca ese server junto con nginx (`frontend/nginx/default.conf`,
+`frontend/docker-entrypoint.sh`), que es quien expone `:80` y reenvía `/api/*` al backend.
 
 ### Base de datos
 
