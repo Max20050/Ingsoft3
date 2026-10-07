@@ -275,6 +275,25 @@ _(pendiente — lo escribo yo a mano)_
 
 ---
 
-**Pendiente de completar en esta sección**: los links a la corrida roja por cobertura, al
-PR mergeado (rojo→tests→verde→merge) y al segundo PR que queda abierto — se agregan
-cuando estén armados los dos PRs de la Tarea 3.
+## 10. La demostración de la Tarea 3
+
+**Primer PR — cuenta la historia completa (rojo → fix → verde → merge):**
+[#18](https://github.com/Max20050/Ingsoft3/pull/18). Agregué `filterSummary` en
+`lib/report-builder-helpers.ts` — una función con 5 caminos (none/pair/many/count/one) que
+describe en una frase cada fila de filtro, para un lector de pantalla — y la subí sin un
+solo test. Compiló perfecto y ningún test existente se rompió.
+
+- Corrida roja, por cobertura: [`…/actions/runs/37655996935`](https://github.com/Max20050/Ingsoft3/actions/runs/37655996935) —
+  `ERROR: Coverage for lines (52.94%) does not meet global threshold (90%)`. Rompió por
+  **líneas**, no por ramas: la función todavía no la llamaba ningún test, y en vitest 3 una
+  función que nadie invoca no suma a la cuenta de ramas (sólo a la de líneas sin cubrir) —
+  es la misma distinción del §3.5 de la guía.
+- Agregué un test por camino (5) más los casos que ejercitan cada `??` de respaldo (6 más,
+  11 tests en total) — al llamar la función, sus ramas internas empezaron a contar, y la
+  primera tanda de tests (sin los casos de respaldo) la dejó en 81.25% de rama, todavía por
+  debajo del 90%. Hubo que cubrir también los `??`, no solo los 5 switch-case.
+- Corrida verde después del fix, mismo PR: el check `Build frontend (Next.js)` pasó a
+  `pass` y `mergeStateStatus` de la PR pasó de `BLOCKED` a `CLEAN`.
+- **Pendiente**: el link al estado ya mergeado (lo mergea el dueño del repo, no el agente —
+  regla del propio `AGENTS.md` del repo) y el link al segundo PR, chiquito, que queda
+  abierto y en rojo hasta la defensa.
