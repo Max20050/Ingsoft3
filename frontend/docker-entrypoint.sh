@@ -1,6 +1,12 @@
 #!/bin/sh
 set -e
 
+# Sólo ${BACKEND_URL}: sin la lista, envsubst también pisaría las variables
+# propias de nginx del template ($host, $remote_addr, etc.) con vacío.
+envsubst '${BACKEND_URL}' \
+  < /etc/nginx/templates/default.conf.template \
+  > /etc/nginx/http.d/default.conf
+
 node server.js &
 NODE_PID=$!
 
