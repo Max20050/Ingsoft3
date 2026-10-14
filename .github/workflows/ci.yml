@@ -68,6 +68,30 @@ jobs:
           name: coverage-backend
           path: backend-coverage
 
+      - name: Extraer cobertura total
+        id: cov
+        if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          TOTAL=$(tail -1 backend-coverage/summary.txt | grep -oE '[0-9]+\.[0-9]+%')
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+          PCT=${TOTAL%\%}
+          if awk "BEGIN{exit !($PCT >= 80)}"; then COLOR=brightgreen
+          elif awk "BEGIN{exit !($PCT >= 50)}"; then COLOR=yellow
+          else COLOR=red
+          fi
+          echo "color=$COLOR" >> "$GITHUB_OUTPUT"
+
+      - name: Actualizar badge de cobertura (gist)
+        if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: b3a3805ef1a1702baeeb0cbc9716b39b
+          filename: coverage.json
+          label: coverage
+          message: ${{ steps.cov.outputs.total }}
+          color: ${{ steps.cov.outputs.color }}
+
       - name: Entrar al registry
         if: github.event_name == 'push'
         uses: docker/login-action@v4

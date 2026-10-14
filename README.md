@@ -1,6 +1,7 @@
 # DocuWave
 
 [![CI](https://github.com/Max20050/Ingsoft3/actions/workflows/ci.yml/badge.svg)](https://github.com/Max20050/Ingsoft3/actions/workflows/ci.yml)
+[![Backend coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Max20050/b3a3805ef1a1702baeeb0cbc9716b39b/raw/coverage.json)](https://github.com/Max20050/Ingsoft3/actions/workflows/ci.yml)
 
 Proyecto de la materia **Ingeniería de Software 3**.
 
