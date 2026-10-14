@@ -18,16 +18,19 @@ ENTRYPOINT ["npm", "run", "test:ci"]
 # ---- Etapa 4: runner sirve la app standalone + nginx como reverse proxy ----
 FROM node:20-alpine AS runner
 LABEL org.opencontainers.image.source https://github.com/Max20050/ingsoft3
-RUN apk add --no-cache nginx
+RUN apk add --no-cache nginx gettext
 WORKDIR /app
 ENV NODE_ENV=production
 # Docker setea HOSTNAME al id del contenedor; sin esto el server de Next
 # bindea solo esa IP y nginx no puede alcanzarlo por 127.0.0.1.
 ENV HOSTNAME=0.0.0.0
+# Valor por defecto para compose (el nombre del servicio en la red interna);
+# en Render cada servicio del frontend lo pisa con la URL pública de SU api.
+ENV BACKEND_URL=http://backend:8080
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY nginx/default.conf /etc/nginx/http.d/default.conf
+COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 EXPOSE 80
