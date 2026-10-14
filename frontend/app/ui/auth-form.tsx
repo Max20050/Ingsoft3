@@ -58,7 +58,11 @@ export function AuthForm({
           className="rounded border border-black/[.1] px-3 py-2 dark:border-white/[.15] dark:bg-black"
         />
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      )}
       <button
         type="submit"
         disabled={pending}
