@@ -297,3 +297,246 @@ solo test. Compiló perfecto y ningún test existente se rompió.
 - **Pendiente**: el link al estado ya mergeado (lo mergea el dueño del repo, no el agente —
   regla del propio `AGENTS.md` del repo) y el link al segundo PR, chiquito, que queda
   abierto y en rojo hasta la defensa.
+
+# Decisiones — TP6
+
+## Enlaces de este TP
+
+- **Paquetes públicos** (probado con un `docker pull`/`tags list` totalmente anónimo, sin
+  `docker login` ni token — una llamada directa al registry con un token anónimo de
+  `ghcr.io/token`, sin usar mi cuenta):
+  - Backend: https://github.com/Max20050/Ingsoft3/pkgs/container/ingsoft3-backend —
+    tag `sha-91fb71db674b0c479fde887e95fd27e8cbe60638`
+  - Frontend: https://github.com/Max20050/Ingsoft3/pkgs/container/ingsoft3-frontend —
+    mismo tag
+- **La cadena de confianza del registry** (Tarea 1):
+  1. PR con los tests en verde, donde «Entrar al registry» aparece **salteado** (el evento
+     no es `push`, así que el `if` lo saltea, no un error):
+     https://github.com/Max20050/Ingsoft3/actions/runs/38503034378/job/115654149935
+  2. Corrida de `main` donde «Construir y publicar la imagen del backend» es el **último**
+     paso del job (antes sólo hay `Post …` que agrega GitHub):
+     https://github.com/Max20050/Ingsoft3/actions/runs/38503181350/job/115654603548
+- **URLs vivas**:
+  - QA: front https://ingsoft3-front-qa-dtom.onrender.com · api https://ingsoft3-api-qa-6umv.onrender.com
+  - PROD: front https://ingsoft3-front-prod-5clx.onrender.com · api https://ingsoft3-api-prod-hb4s.onrender.com
+- **Release**: https://github.com/Max20050/Ingsoft3/releases/tag/v6.0.0
+
+> Mi stack no es el de la guía (.NET + Vite + nginx aparte): backend es **Go** y frontend es
+> **Next.js**. Donde la guía asume algo específico de ese stack lo aclaro en el punto
+> correspondiente — en general salió más simple de lo que la guía anticipa (Go lee
+> `DATABASE_URL` como URI cruda, sin traducir a pares `Clave=Valor`; las migraciones corren
+> solas con mi propio `migrate.Run()`, equivalente al `EnsureCreated()`).
+
+## 1. Por qué el artefacto se publica sólo con la verificación en verde
+
+Porque si el registry tuviera imágenes publicadas sin pasar los tests, la palabra
+«publicado» dejaría de significar «pasó la verificación» y pasaría a significar
+únicamente «alguien construyó esto alguna vez» — que es la trampa que describe la guía. En
+mi `ci.yml` esto no es un `if` que lea el resultado de los tests: es **orden de pasos**. El
+paso que construye y publica la imagen (`Construir y publicar la imagen del backend/frontend`)
+es el **último** del job, después de «Build the backend/frontend tests stage», «Run … tests
+with coverage» y el reporte de coverage. Si el `docker run` de los tests devuelve rojo, el
+job muere ahí mismo y ese último paso directamente **no llega a ejecutarse** — no hace falta
+ningún `if: success()` porque es el comportamiento por defecto de GitHub Actions (cortar al
+primer error). Lo verifiqué mirando el log de una corrida real (la del punto «Enlaces»):
+en la corrida de main los 10 pasos corrieron en ese orden exacto.
+
+La cadena completa son tres eslabones, no uno: (1) nada entra a `main` sin el pipeline en
+verde (gate del TP4/TP5), (2) `push: ${{ github.event_name == 'push' && github.ref ==
+'refs/heads/main' }}` hace que sólo un push a `main` pueda llegar a publicar, y (3) el paso
+que publica es el último del mismo job que corrió los tests. Ninguno de los tres solo
+alcanza: sin el (3), un pipeline podría publicar primero y testear después y cumplir (1) y
+(2) igual, con el registry lleno de imágenes rotas.
+
+## 2. Continuous Delivery vs Continuous Deployment: cuál implementé
+
+Implementé **Continuous Delivery**: todo push verde a `main` llega automáticamente a QA, y
+de ahí a PROD sólo con una aprobación humana explícita (`environment: production` con
+required reviewer). No es Continuous Deployment porque el último paso hacia producción no es
+automático — hay un `Waiting for review` real en el medio, que yo mismo aprobé o rechacé.
+
+Elegí Delivery y no Deployment porque mi red de seguridad automática no es lo
+suficientemente madura para sacar al humano: mi cobertura de tests (TP5) es sobre lógica
+puntual (hashing, JWT, compilación de queries), no sobre todo el sistema, y mi smoke test
+sólo prueba que la app responde — no prueba que una feature nueva funcione bien de punta a
+punta. Si sacara la aprobación humana hoy, estaría automatizando la propagación de errores a
+producción sin tener la observabilidad (TP9) que avisaría a tiempo. Para llegar a Continuous
+Deployment en serio me faltaría: monitoreo real en producción con alertas, un conjunto de
+smoke/e2e tests que cubra los flujos críticos (no sólo "responde"), y feature flags para
+poder apagar algo sin un rollback completo.
+
+## 3. El diseño de la cadena (`needs`/`if`/`environment`) y el alcance de los secrets
+
+```
+build-backend    (sin needs)                              ← publica sólo si push a main
+build-frontend   (sin needs)                               ← ídem
+deploy-qa        needs: [build-backend, build-frontend]    · environment: qa
+                 if: github.ref == 'refs/heads/main'         (los PR no despliegan)
+deploy-prod      needs: deploy-qa                           · environment: production
+                 (sin if propio — lo hereda de deploy-qa: si deploy-qa no corrió          
+                  porque es un PR, deploy-prod tampoco corre)
+                 concurrency: { group: deploy-prod, cancel-in-progress: false }
+```
+
+Los secrets de deploy viven **en el environment**, no en el repo:
+
+| Secret | Environment | Quién lo puede leer |
+|---|---|---|
+| `RENDER_HOOK_API_QA`, `RENDER_HOOK_FRONT_QA` | `qa` | cualquier job con `environment: qa` (sin aprobación, QA es automático a propósito) |
+| `RENDER_HOOK_API_PROD`, `RENDER_HOOK_FRONT_PROD` | `production` | sólo un job con `environment: production` **después** de que el reviewer lo aprueba |
+| `GITHUB_TOKEN` | repo (automático) | lo emite GitHub por corrida, con los permisos que declaro en `permissions:` de cada job (`packages: write` sólo en `build-backend`/`build-frontend`, mínimo privilegio) |
+
+Las connection strings de Neon (`DATABASE_URL` de `app_qa`/`app_prod`) **no son secrets de
+GitHub**: son variables de entorno configuradas directamente en cada servicio de Render
+(`ingsoft3-api-qa` / `ingsoft3-api-prod`). Mi pipeline nunca las toca ni las necesita — sólo
+dispara el deploy hook, y Render arranca el contenedor con la configuración que ya tiene
+guardada. Separar esto así es justo lo que hace que la misma imagen (o en este caso, el
+mismo commit reconstruido, ver punto 6) sirva en los dos entornos: lo único que cambia entre
+QA y PROD vive en Render y en Neon, no en GitHub ni en el código.
+
+Si estos secrets estuvieran en el repo en vez del environment, cualquier job de cualquier
+workflow (incluido uno que corre sobre un PR de un fork, si algún día acepto contribuciones
+externas) tendría acceso a disparar un deploy a producción. Con el secret en el environment
+`production`, sólo un job que declare `environment: production` **y** que pase la revisión
+puede leerlo — es el mismo alcance de secrets de environment vs. repo que ya usamos para
+separar QA de PROD.
+
+## 4. Qué mira mi aprobador antes de aprobar
+
+Antes de aprobar un deploy a producción, lo que reviso es: (1) que `deploy-qa` haya
+terminado en verde en esa misma corrida (si QA no pasó, no tiene sentido promover ese
+commit); (2) qué cambia ese commit — si toca algo sensible (credenciales, connection string,
+esquema de datos) lo miro con más cuidado que un cambio de texto; (3) si hay más de una
+corrida esperando aprobación a la vez, reviso cuál es la más reciente y rechazo las viejas a
+mano (ver §3.4 de la guía: aprobar una corrida vieja después de una nueva hace retroceder
+PROD). En la práctica de este TP usé estos criterios literalmente: rechacé la primera
+corrida porque el smoke de QA había tardado sólo 5 segundos y quería confirmar en el log que
+no era un falso verde por cache antes de promoverlo, y aprobé la segunda después de
+confirmar que el smoke de QA había corrido bien y que el cambio (un texto del login) era de
+riesgo mínimo.
+
+Lo que el aprobador **no** puede ver, y es una limitación real: no tengo ninguna métrica de
+producción (latencia, tasa de error, uso de CPU/memoria) delante en el momento de aprobar —
+sólo tengo el resultado binario del smoke test de QA. Si algo degrada performance sin
+romper el `/health`, no lo veo hasta después del deploy. Eso es exactamente lo que el TP9
+(observabilidad) viene a cerrar.
+
+## 5. La letra chica de mi free tier
+
+- **Cold start**: los 4 servicios de Render duermen a los ~15 minutos sin tráfico; el primer
+  request después de dormir tarda hasta ~1 minuto. Por eso el smoke test de `deploy-qa` y
+  `deploy-prod` reintenta 30 veces cada 20 segundos (hasta 10 minutos) en vez de un `curl`
+  seco — en la práctica, en mis corridas reales el smoke pasó en 5-33 segundos porque los
+  servicios ya estaban despiertos de pruebas anteriores, pero el reintento está para el caso
+  frío.
+- **Horas de instancia** (750/mes por workspace) y **minutos de build** (500/mes): cada
+  push a `main` reconstruye 2 imágenes en Render (backend y frontend de QA), y cada
+  aprobación a PROD reconstruye 2 más — hasta 4 builds de Render por ciclo completo. Todavía
+  no me quedé sin cupo, pero lo voy a estar mirando en *Workspace → Billing* a medida que se
+  acerque la defensa, porque si se agota, Render deja de construir hasta fin de mes y el
+  smoke seguiría dando verde contra la versión vieja sin que nada lo avise.
+- **Neon**: el cómputo se suspende a los ~5 minutos de inactividad y se despierta solo, más
+  rápido que Render. Hasta ahora no pegué contra el límite de almacenamiento (0.5 GB) ni de
+  horas de cómputo mensuales.
+
+## 6. Qué garantía pierdo porque Render reconstruye desde el repo
+
+Mi pipeline publica una imagen etiquetada con el commit (`ghcr.io/.../ingsoft3-backend:sha-<commit>`),
+pero el deploy hook de Render no usa esa imagen: le pide a Render que **vuelva a construir**
+el mismo commit desde el Dockerfile del repositorio. Así que lo que corre en QA y PROD es
+una **segunda construcción** del mismo código, no la imagen que mis tests verificaron. En la
+práctica eso significa que si una dependencia de Go o de npm resuelve a una versión distinta
+entre el build de GitHub Actions y el build de Render (porque alguna no está fijada con una
+versión exacta, o una imagen base como `node:20-alpine`/`golang:1.24-alpine` se actualizó
+entre un build y el otro), el binario que corre en producción podría no ser bit-a-bit
+idéntico al que pasó los tests — aunque venga del mismo commit. Lo que promuevo es el
+**commit verificado**, no la **imagen verificada**. Convertir esa garantía en real —que
+Render (o lo que sea) despliegue literalmente la imagen que publiqué en el §3.0, no una
+reconstrucción— es, según la guía, exactamente el problema que resuelve el TP7.
+
+## 7. Qué prueba mi smoke test y qué no
+
+Mi smoke test (en `deploy-qa` y `deploy-prod`) pega a `GET /health` y a `GET /` del front, en
+loop con reintentos. Le agregué algo que el ejemplo original no tenía: `/health` ahora hace
+`pool.Ping(ctx)` contra la base antes de contestar `ok` (si la conexión falla, devuelve 503)
+— así un `DATABASE_URL` mal copiado entre QA y PROD (el error más silencioso que señala la
+guía) hace fallar el smoke en vez de dar un falso verde. Lo que el smoke **no** prueba: no
+confirma que la *feature* que acabo de desplegar funcione — sólo que el proceso levantó y
+que puede hablar con su base. Tampoco me dice **qué versión** está respondiendo: si Render
+sigue sirviendo el build anterior mientras el nuevo termina de construir (la guía lo marca
+como un riesgo real: el verde puede llegar antes de que el build nuevo esté listo), mi smoke
+igual daría verde. No implementé todavía que `/health` devuelva el commit que corre y que el
+smoke lo compare contra `github.sha` — queda señalado como **pendiente**, la guía lo marca
+como opcional en el TP6 y obligatorio en el TP7.
+
+## 8. Deployment pattern para producción real + plan de rollback
+
+Para esta app en una producción real con usuarios eligiría **blue-green**: tengo dos
+entornos completos (QA/PROD ya los tengo separados) y el riesgo de un deploy que rompe algo
+crítico —como la conexión a una base de datos ajena en `datasource.Connector`, o el cifrado
+de credenciales— lo quiero poder revertir al instante, no de a tandas (que es lo que ofrece
+rolling). No elegiría canary todavía porque no tengo la observabilidad (TP9) para decidir
+automáticamente «el canario sangra, corta el tráfico» — sin métricas, canary es repartir
+tráfico a ciegas. Un caso donde sí usaría **feature flags**: liberar `AI_SUMMARY_ENABLED`
+gradualmente por usuario en vez del booleano global que tengo hoy, para probar el costo real
+de los resúmenes de IA con un grupo chico antes de prenderlo para todos.
+
+**Plan de rollback actual**, paso a paso: (1) identificar el commit bueno anterior —
+`gh api 'repos/.../deployments?environment=production' --jq '.[0].sha'` me da el que está
+live, el anterior lo saco de `git log` o de la release previa; (2) disparar los mismos dos
+hooks de PROD con `&ref=<ese-sha>` (no hace falta aprobación de GitHub para esto: ya no pasa
+por el workflow, es un `curl` directo — lo cual es en sí mismo una limitación: el rollback de
+emergencia *evita* el gate humano a propósito, para no tener que esperar un run completo);
+(3) esperar en Render → `ingsoft3-api-prod`/`ingsoft3-front-prod` → **Deploys** a que ese
+commit figure como **live**, no fiarme del `/health` (contestaría verde con la versión que
+estoy revirtiendo).
+
+**Pendiente**: todavía no ejecuté un rollback real para medir el tiempo — lo que tengo es el
+plan y el comando, no el número cronometrado que pide la Tarea 6 (la guía es explícita: tiene
+que ser medido, no estimado). Lo voy a hacer antes de la defensa y voy a completar este punto
+con la hora de inicio y la hora de *live* que muestre Render. Lo que el rollback de código
+**no** deshace, en cualquier caso: si llegara a desplegar una migración que borra o altera una
+columna, revertir el código no recupera esos datos — para eso haría falta un backup de Neon
+restaurado a un punto anterior, que es una operación separada del deploy.
+
+## 9. Problemas encontrados y cómo los resolví
+
+- **nginx con el host del backend hardcodeado**: el frontend (agregado en un PR anterior,
+  #17, que metió nginx como reverse proxy único dentro del contenedor del frontend) tenía
+  `proxy_pass http://backend:8080;` fijo en `frontend/nginx/default.conf`. Ese nombre sólo
+  existe en la red interna de `docker-compose`; en Render, nginx no podía resolverlo y el
+  contenedor moría al arrancar (`host not found in upstream "backend"`). Lo resolví con el
+  mismo patrón que usa la guía para el nginx de Vite, pero manual (esta imagen no usa la
+  imagen oficial de nginx, instala el paquete de Alpine a mano): renombré el archivo a
+  `default.conf.template`, metí `${BACKEND_URL}` en el `proxy_pass`, y en
+  `docker-entrypoint.sh` corro `envsubst '${BACKEND_URL}'` **antes** de levantar nginx —
+  limitando la sustitución a esa sola variable para no pisar las variables propias de nginx
+  del mismo archivo (`$host`, `$remote_addr`, etc., que `envsubst` sin lista de por medio
+  también reemplazaría por vacío). `BACKEND_URL` ahora es una variable de entorno de Render,
+  distinta por servicio, con default `http://backend:8080` para no romper mi
+  `docker-compose.yml` local.
+- **`permission_denied: write_package` al publicar en ghcr.io**: fueron dos causas
+  encadenadas, no una. Primero, *Settings → Actions → General → Workflow permissions* del
+  repo estaba en **Read** — ese setting es un **techo**: aunque el job declare
+  `permissions: packages: write`, GitHub lo capa a sólo lectura si el default del repo es
+  read-only. Lo cambié a *Read and write* vía `gh api`. Eso no alcanzó: los paquetes
+  `ingsoft3-backend`/`ingsoft3-frontend` ya existían desde el TP2, publicados a mano con mi
+  propio token — y un paquete así **no** le da automáticamente permiso de escritura al
+  `GITHUB_TOKEN` de Actions de mi repo (a diferencia de un paquete que un workflow crea de
+  cero, que queda enlazado solo). Tuve que ir a la *Package settings* de cada uno → **Manage
+  Actions access** → agregar el repo con rol **Write** (lo había agregado primero con
+  **Read**, que da el mismo error).
+
+## 10. Declaración de uso de IA
+
+Este TP lo hice en pair-programming activo con Claude Code (Claude Sonnet 5), más que en
+cualquier TP anterior: el `ci.yml` (jobs de publicar imagen, `deploy-qa`, `deploy-prod`), el
+fix de nginx, la creación de los environments de GitHub (`qa`/`production`, con el required
+reviewer) y los comandos de aprobación/rechazo de deploys los escribió o ejecutó la IA, con
+mi autorización explícita en cada paso (yo puse los deploy hooks de Render como secrets a
+mano, nunca se los pasé por el chat). Lo verifiqué leyendo cada diff antes de que se
+mergeara, corriendo las corridas reales de Actions y mirando los logs cuando algo falló (los
+dos problemas del punto 9 los diagnosticamos juntos leyendo el error exacto del log, no a
+ciegas). Lo que puedo explicar sin mirar el archivo: por qué el paso de publicar va último,
+qué hace cada `needs`/`if`, por qué los secrets de PROD viven en el environment y no en el
+repo, y por qué rechacé la primera corrida y aprobé la segunda.
