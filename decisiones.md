@@ -529,14 +529,4 @@ restaurado a un punto anterior, que es una operación separada del deploy.
 
 ## 10. Declaración de uso de IA
 
-Este TP lo hice en pair-programming activo con Claude Code (Claude Sonnet 5), más que en
-cualquier TP anterior: el `ci.yml` (jobs de publicar imagen, `deploy-qa`, `deploy-prod`), el
-fix de nginx, la creación de los environments de GitHub (`qa`/`production`, con el required
-reviewer) y los comandos de aprobación/rechazo de deploys los escribió o ejecutó la IA, con
-mi autorización explícita en cada paso (yo puse los deploy hooks de Render como secrets a
-mano, nunca se los pasé por el chat). Lo verifiqué leyendo cada diff antes de que se
-mergeara, corriendo las corridas reales de Actions y mirando los logs cuando algo falló (los
-dos problemas del punto 9 los diagnosticamos juntos leyendo el error exacto del log, no a
-ciegas). Lo que puedo explicar sin mirar el archivo: por qué el paso de publicar va último,
-qué hace cada `needs`/`if`, por qué los secrets de PROD viven en el environment y no en el
-repo, y por qué rechacé la primera corrida y aprobé la segunda.
+_(pendiente — lo escribo yo a mano)_
