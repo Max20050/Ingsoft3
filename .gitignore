@@ -19,6 +19,10 @@ frontend/node_modules/
 /backend-coverage/
 /frontend-coverage/
 
+# Playwright (TP7): reportes y resultados, generados en cada corrida
+frontend/playwright-report/
+frontend/test-results/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -200,6 +200,7 @@ export default function RecipientsPage() {
             </div>
             <button
               onClick={() => handleDeleteRecipient(recipient.id)}
+              aria-label={`Delete recipient ${recipient.email}`}
               className="text-sm text-red-600 hover:underline"
             >
               Delete
