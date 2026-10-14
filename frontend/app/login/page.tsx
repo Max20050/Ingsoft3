@@ -19,7 +19,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 bg-zinc-50 px-6 py-32 dark:bg-black">
-      <h1 className="text-2xl font-semibold">Log in</h1>
+      <h1 className="text-2xl font-semibold">Log in to DocuWave</h1>
       <AuthForm submitLabel="Log in" onSubmit={handleSubmit} />
       <div className="flex w-full max-w-sm items-center gap-3 text-xs uppercase text-zinc-400">
         <div className="h-px flex-1 bg-black/[.1] dark:bg-white/[.15]" />
