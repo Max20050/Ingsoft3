@@ -1,5 +1,9 @@
 server {
-    listen 80;
+    # PORT llega por variable de entorno: en compose no está seteada (usa el
+    # default de 80 del entrypoint), en Render es el puerto que el proveedor
+    # le asigna al servicio — ahí es donde manda el tráfico, así que nginx
+    # tiene que escuchar exactamente ahí, no en un 80 fijo que nadie usa.
+    listen ${PORT};
 
     location /api/ {
         # BACKEND_URL llega por variable de entorno y se resuelve recién al
