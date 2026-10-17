@@ -530,3 +530,210 @@ restaurado a un punto anterior, que es una operación separada del deploy.
 ## 10. Declaración de uso de IA
 
 _(pendiente — lo escribo yo a mano)_
+
+# Decisiones — TP7
+
+## Enlaces del TP7
+
+- **Paquetes públicos**, con la etiqueta del commit que está hoy en PROD:
+  - Backend: https://github.com/Max20050/Ingsoft3/pkgs/container/ingsoft3-backend —
+    tag `sha-7a61dbe1351726431ca8f3c9c0b3f033d295b827`
+  - Frontend: https://github.com/Max20050/Ingsoft3/pkgs/container/ingsoft3-frontend —
+    mismo tag
+- **La corrida con integración VERDE y e2e ROJA** (la evidencia central del TP, §3.4): no la
+  fabriqué rompiendo una línea a propósito — es un bug real que el propio gate destapó la
+  primera vez que algo le habló de verdad al `/api/` del front:
+  - Commit: `20516af` (PR #28, el que agrega los jobs `integracion`/`e2e` al pipeline)
+  - Corrida: https://github.com/Max20050/Ingsoft3/actions/runs/38807619998
+  - Reporte de integración (verde): artefacto `playwright-report-integracion` de esa corrida
+  - Reporte de e2e (rojo): artefacto `playwright-report-e2e` de esa misma corrida
+  - `deploy-prod` ni llegó a aparecer como pendiente de aprobación
+- **La corrida completa en verde posterior, hasta PROD**:
+  https://github.com/Max20050/Ingsoft3/actions/runs/39066405861 (commit `7a61dbe`, el mismo
+  que quedó taggeado como `v7.0.0`)
+- **URLs vivas**:
+  - QA: front https://ingsoft3-front-qa-dtom.onrender.com · api https://ingsoft3-api-qa-6umv.onrender.com
+  - PROD: front https://ingsoft3-front-prod-5clx.onrender.com · api https://ingsoft3-api-prod-hb4s.onrender.com
+- **Release**: https://github.com/Max20050/Ingsoft3/releases/tag/v7.0.0
+
+## 1. Build once, deploy many: qué problema del TP6 resuelve la imagen como unidad
+
+En el TP6 mi `deploy-qa`/`deploy-prod` mandaban `&ref=$GITHUB_SHA`: le pedían a Render que
+**reconstruyera** ese commit. Yo mismo lo dejé anotado como límite conocido en el punto 6 del
+TP6 — lo que corría en cada entorno era una segunda construcción, no la imagen que mis tests
+habían verificado. La prueba de que esto no era sólo una preocupación teórica la tuve en este
+mismo TP: encontré un bug (la sección de problemas, más abajo) que dependía pura y
+exclusivamente de **cómo arranca el contenedor en runtime** (nginx escuchando en el puerto
+que Render le asigna). Si QA y PROD hubieran reconstruido por separado en vez de ejecutar la
+misma imagen, no tendría ninguna garantía de que el contenedor de PROD se comportara igual
+que el que probé en QA — sería, otra vez, "probablemente el mismo código, no demostrablemente
+el mismo binario". Con `imgURL=ghcr.io/.../sha-<commit>` en el hook, promover a PROD significa
+literalmente "arrancá este contenedor ya construido", el mismo que corrió la suite de e2e.
+
+## 2. Estrategia de etiquetas, y con qué imagen quedaron configurados los servicios
+
+`sha-<commit>` en el registry es la etiqueta que mi pipeline publica y la única que usa para
+desplegar — identifica de qué commit salió, y es la que viaja en el parámetro `imgURL` de cada
+hook. `v7.0.0` en git es el nombre que le pongo, al cerrar el práctico, al commit que
+**Deployments** dice que está activo en `production` — no al último de `main`, que podría ser
+uno que rechacé o que todavía espera aprobación. No publico `latest` a propósito: si lo
+hiciera, cualquier servicio configurado con esa etiqueta desplegaría "lo último que se
+publicó" sin que nada garantice que pasó las suites — y un `imgURL=…:latest` en el hook ni
+siquiera tendría sentido, porque la gracia de este TP es decir *exactamente* qué imagen va a
+cada entorno.
+
+Los cuatro servicios de Render quedaron configurados, en *Settings → Image*, con la imagen del
+primer merge que hice para este TP (`sha-7f8a7d9…`, el de la PR #25). Esa **no** es la que
+corre hoy: es sólo el valor con el que probé por primera vez que `Existing Image` funcionaba
+en el plan gratis. Lo que corre en cada entorno lo define cada deploy del pipeline con su
+propio `imgURL` — por eso no hace falta tocar *Settings* en cada merge, y por eso "qué imagen
+tiene configurada el servicio" y "qué imagen está corriendo" son dos preguntas distintas (la
+nota del §3.2 sobre *Manual Deploy* es justo sobre esto: ese botón despliega lo que dice
+*Settings*, no lo último que corrió).
+
+## 3. De la release a la imagen, en un paso
+
+`git rev-list -n1 v7.0.0` da el commit (`7a61dbe1351726431ca8f3c9c0b3f033d295b827`). Esa misma
+cadena, con el prefijo `sha-`, es la etiqueta que mi pipeline le puso a las dos imágenes de ese
+commit en `ghcr.io` — lo verifiqué pidiendo el manifest de las dos directamente al registry,
+sin `docker login`, con un token anónimo de `ghcr.io/token` (la misma técnica del TP6). No hay
+tabla ni mapeo que mantener aparte: el tag del paquete *es* el commit del tag de git.
+
+## 4. Cómo se comprueba desde afuera que un entorno ejecuta la imagen, y qué no prueba el smoke
+
+Se comprueba en *Events* de cada servicio de Render: el deploy dice **"Triggered via Deploy
+Hook"** y nombra el `sha-<commit>` de la corrida — no hay ningún build log de Render ahí,
+porque no hay nada que construir. Eso es lo público-por-panel que no puedo linkear (vive
+adentro de mi cuenta), así que es lo que muestro en vivo en la defensa.
+
+El smoke test (`/health` de la api, `/` del front) **no** prueba esto: sólo prueba que el
+proceso responde, con la versión que sea. Y tengo un ejemplo real, no hipotético: durante este
+mismo TP, el smoke de `deploy-qa` dio **verde** en una corrida donde el front no podía hablar
+con el backend en absoluto (el bug de nginx de la sección 9) — porque `/health` le pega
+directo a la api, sin pasar por el front, y `/` el front lo sirve igual aunque su proxy hacia
+`/api/` esté roto. El smoke me dijo "las dos piezas están paradas"; no tenía forma de decirme
+"y se hablan entre sí". Eso es exactamente lo que, en este TP, pasaron a cubrir la integración
+y la e2e.
+
+## 5. Qué pruebas elegí para cada suite, y qué dejé afuera
+
+**Integración** (`e2e/api.spec.ts`, contra `/api/recipients` de la api de QA):
+1. Alta → aparece en el `GET` → borrado → ya no aparece (la obligatoria).
+2. Alta con `email` vacío → `400`, y el `GET` de antes/después tiene el mismo largo (la
+   obligatoria de validación).
+3. **La que elegí**: borrar un `id` que no existe → `404`. La guardé porque ejercita algo que
+   sólo la base de verdad puede contestar: el `DELETE` hace
+   `WHERE id = $1 AND user_id = $2`, así que "no existe" y "no es tuyo" dan la misma respuesta
+   — un doble no tiene ninguna noción de *ownership* para fallar ahí.
+
+**e2e** (`e2e/recipients.spec.ts`, navegador contra el front de QA):
+1. Crear un destinatario → aparece en la lista → borrarlo → ya no está (la obligatoria de
+   creación).
+2. Login con credenciales con formato válido pero incorrectas → error visible, no entra (la
+   obligatoria de error — tuve que armarla así y no con un campo vacío, porque `email` y
+   `password` tienen validación nativa del navegador (`required`, `minLength=8`) que nunca
+   deja que un dato inválido llegue a tocar mi `fetch`; un login que no existe sí pasa esa
+   barrera y llega de verdad al backend).
+3. **La que elegí**: crear un destinatario, **recargar la página**, y comprobar que la sesión
+   (en `localStorage`) y el dato (en la base) siguen ahí, antes de borrarlo. La regla de la
+   Tarea 3 es "el flujo que tu usuario hace todos los días, el que si se rompe te escriben": en
+   una app que vive de sesiones largas armando reportes, perder el trabajo por un F5 es
+   exactamente ese tipo de rotura silenciosa.
+
+**Qué dejé afuera, en las dos suites, y por qué**: DocuWave tiene bastante más superficie que
+`recipients` (datasources, templates, reports, llm-config, grupos de destinatarios) — todo
+sigue el mismo patrón de `authHandlers.RequireAuth` + CRUD contra Postgres. No repetí el mismo
+caso en cada recurso: el riesgo que la pirámide dice que hay que cubrir es "¿mi API habla bien
+con la base?", y eso ya lo prueba `recipients` sin necesitar seis copias del mismo test con
+otro nombre. Específicamente no puse: alta de fuentes de datos ni reportes (dependen de una
+conexión externa real o de un LLM pago — no determinístico y con costo, lo opuesto a lo que
+una suite que corre en cada merge necesita) y el login con Google (un consentimiento real de
+una pantalla de terceros no se puede automatizar sin un doble, que es justo lo que esta TP
+prohíbe para la e2e).
+
+## 6. Qué probás en integración y qué en e2e, y por qué no es lo mismo
+
+El par de esta corrida (§3.4, run `38807619998`) fue, literalmente: **integración verde, e2e
+roja**, sin tocar `e2e/` en el commit que la causó. Leído contra la tabla del §2.5: eso dice
+que la api y la base están sanas (mi integración le habla directo a `/api/...` y contesta
+bien), y que **el problema está en cómo el front usa la api** — no pude verlo ni con un
+unitario (no hay ningún doble que sepa de nginx) ni con la integración (que nunca pasa por el
+dominio del front). Confirmé la lectura con la traza de red de Playwright antes de tocar una
+línea de código: el pedido a `/api/auth/login` **a través del front** volvía con
+headers de **Next.js** (`x-powered-by: Next.js`), no de mi backend Go — la prueba de que el
+front nunca le estaba hablando a la api en absoluto. La integración no lo pudo ver porque mide
+justamente lo que el front no estaba usando bien: la api en sí.
+
+## 7. Por qué mi integración es la amplia, y no la estrecha
+
+Elegí pegarle a la api de QA ya desplegada (la amplia, §2.5) en vez de armar un servidor en
+memoria con una base descartable (la estrecha, el equivalente Go sería `httptest.NewServer` +
+un Postgres con `testcontainers`). Gano: no mantengo una segunda infraestructura de testing
+paralela a la de producción, y de paso pruebo que el *deploy* salió bien (la estrecha nunca
+tocaría Render). Pierdo: mi integración depende de que QA esté arriba y responda rápido — si
+Render está teniendo un mal día, mi suite falla sin que mi código tenga ninguna culpa (algo
+que, dicho sea de paso, no me pasó: los dos fallos reales que tuve fueron de configuración, no
+de latencia). También pierdo aislamiento: dos corridas en paralelo comparten la misma base de
+QA, el límite que ya anota la guía en §3.4 y que resolví con la regla de "un merge por vez
+mientras la cadena corre".
+
+## 8. Cold start y qué es un test flaky
+
+Mis tres resguardos: `retries: 1` y `expect.timeout: 15_000` en `playwright.config.ts` (un
+reintento absorbe una demora puntual de Render, no un error real — si falla dos veces seguidas
+no es el free tier, es el código), y el orden de la cadena (`integracion` corre antes que
+`e2e`, así que para cuando el browser arranca, QA ya lleva varios pedidos encima y está
+despierto). Un test *flaky* es uno que a veces pasa y a veces falla **con el mismo código y el
+mismo entorno** — típicamente por una espera implícita que no alcanza. Mis dos roturas reales
+de esta semana (la sección 9) no fueron eso: fallaban **siempre**, de la misma forma, con la
+misma causa — por eso supe que no era cuestión de subir un timeout, sino de leer la traza.
+
+## 9. Cómo logré que la misma imagen del front sirva en QA y en PROD
+
+Lo único que distingue a los dos `front-*` de Render es una variable de entorno,
+`BACKEND_URL` — apunta a la api de QA en un servicio y a la de PROD en el otro. Todo lo demás
+se resuelve en el arranque del contenedor, nunca en build time: `docker-entrypoint.sh` corre
+`envsubst` sobre la plantilla de nginx recién al iniciar, sustituyendo `BACKEND_URL` **y**,
+desde el arreglo de esta semana, también `PORT` (el que Render le asigna al servicio). La
+imagen que publica el pipeline es idéntica en los dos entornos — lo que cambia es la
+configuración que Render le inyecta a cada uno.
+
+## 10. Problemas encontrados y cómo los resolví
+
+Esta semana tuve dos bugs reales, no fabricados, y los dos los encontró la suite de e2e en su
+primera corrida real contra QA — ninguno lo había visto el smoke del TP6 porque, como anoto en
+el punto 4, nunca ejercita un pedido real a `/api/` a través del dominio del front:
+
+- **Next.js escuchaba en el puerto que Render le asigna, no nginx** (PR #29). Los logs de
+  `front-qa` mostraban `Detected service running on port 10000`: Render inyecta su propio
+  `PORT`, y el `server.js` standalone de Next lo toma por defecto, así que terminaba
+  escuchando justo donde Render manda el tráfico externo. nginx, con un `listen 80` fijo,
+  quedaba totalmente al margen — todo lo servía Next directo, y como Next no tiene ninguna
+  ruta `/api/*` propia, contestaba con su propio 404 (lo confirmé mirando los *headers* de la
+  respuesta: `x-powered-by: Next.js` en un pedido a `/api/me`, algo que mi backend Go jamás
+  manda). Arreglo: nginx pasa a escuchar en `${PORT}` (con default 80 para no romper el
+  compose local), y Next se arranca siempre con `PORT=3000` fijo en el entrypoint, sin
+  importar qué variable le inyecte el entorno de afuera.
+- **Loop infinito entre el front y la api** (PR #30), apenas arreglé lo anterior. Con nginx ya
+  recibiendo el tráfico, `/api/*` pasó de 404 a `508 Loop Detected`. La causa: el `location
+  /api/` tenía `proxy_set_header Host $host;`, que fuerza el header `Host` del pedido
+  reenviado a ser el dominio del **front**. Render enruta sus servicios por ese header — con
+  el `Host` del front puesto, el pedido a la api volvía a resolver al propio front, que lo
+  volvía a proxyar igual, y así hasta que Render cortaba el loop. Arreglo: sacar esa línea de
+  ese location (el default de nginx sin ella, `Host: $proxy_host`, ya pone el host correcto —
+  el de `BACKEND_URL`).
+
+Diagnostiqué los dos con la traza de red de Playwright (`trace: 'on-first-retry'`) y
+comparando headers con `curl -I`, nunca mirando el código a ciegas primero — exactamente el
+método que pide la Tarea 4.
+
+## 11. Declaración de uso de IA
+
+Usé Claude Code (Sonnet 5) para: escribir las dos suites de Playwright, cablear los jobs
+`integracion`/`e2e` y el gate en `ci.yml`, y diagnosticar los dos bugs de la sección 10
+leyendo las trazas de red y los headers de las respuestas reales contra QA (no inventados).
+Verifiqué cada pieza antes de darla por buena: corrí las 6 pruebas contra mi propio
+`docker compose` antes de subir nada, y para los dos bugs de producción confirmé la hipótesis
+con `curl` directo contra las URLs de QA (comparando headers de `/` contra `/api/me`, y
+probando el manifest del registry sin autenticación) antes de tocar la plantilla de nginx —
+en ningún caso apliqué un fix a ciegas esperando que el próximo deploy lo confirmara.
