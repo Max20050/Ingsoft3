@@ -11,7 +11,13 @@ server {
         # envsubst): en compose es el nombre del servicio, en Render es la
         # URL pública de la api de ESE entorno.
         proxy_pass ${BACKEND_URL};
-        proxy_set_header Host $host;
+        # Sin "Host $host" acá a propósito: Render enruta sus servicios por el
+        # header Host, y $host es el dominio del FRONT. Si lo forzáramos,
+        # nginx le llegaría a la api con el Host del front puesto, Render lo
+        # malinterpretaría como un pedido PARA el front y lo rebotaría de
+        # vuelta -> loop infinito (508 Loop Detected). Sin esta línea, nginx
+        # usa su default ($proxy_host, el host de BACKEND_URL), que es lo que
+        # hace falta para que Render enrute al servicio correcto.
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
