@@ -29,7 +29,7 @@ resource "neon_project" "preprod" {
   # alcanza para un entorno efímero que se destruye al terminar cada sesión.
   history_retention_seconds = 21600
 
-  branch = {
+  branch {
     name          = "preprod"
     database_name = "preprod"
     role_name     = "preprod_app"
