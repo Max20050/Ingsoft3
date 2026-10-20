@@ -1,7 +1,8 @@
 # Copiar a terraform.tfvars (gitignored) y completar con valores reales.
 # Nunca commitear terraform.tfvars.
 
-image_tag = "sha-<40-caracteres-del-commit-ya-promovido-a-qa>"
+image_tag   = "sha-<40-caracteres-del-commit-ya-promovido-a-qa>"
+neon_org_id = "<org-xxxxxxxx, de la página de Settings de tu organización en Neon>"
 
 jwt_secret                 = "<generar con: openssl rand -base64 32>"
 datasource_encryption_key  = "<generar con: openssl rand -base64 32>"

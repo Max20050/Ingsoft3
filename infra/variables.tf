@@ -3,6 +3,11 @@ variable "image_tag" {
   type        = string
 }
 
+variable "neon_org_id" {
+  description = "ID de la organización de Neon (Organization settings → Settings → General, o en la URL del dashboard)."
+  type        = string
+}
+
 variable "jwt_secret" {
   description = "Secreto para firmar JWT en el backend de preprod."
   type        = string

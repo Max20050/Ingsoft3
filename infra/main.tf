@@ -25,6 +25,11 @@ provider "render" {}
 resource "neon_project" "preprod" {
   name = "ingsoft3-preprod"
 
+  # Las cuentas de Neon organizadas por org requieren org_id explícito al
+  # crear el proyecto (no estaba en la doc del provider que leímos, apareció
+  # recién al correr el apply real).
+  org_id = var.neon_org_id
+
   # Neon exige retención > 0 para habilitar restores PITR en la rama. 6h
   # alcanza para un entorno efímero que se destruye al terminar cada sesión.
   history_retention_seconds = 21600
