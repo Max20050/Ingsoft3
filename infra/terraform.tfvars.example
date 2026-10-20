@@ -1,0 +1,15 @@
+# Copiar a terraform.tfvars (gitignored) y completar con valores reales.
+# Nunca commitear terraform.tfvars.
+
+image_tag = "sha-<40-caracteres-del-commit-ya-promovido-a-qa>"
+
+jwt_secret                 = "<generar con: openssl rand -base64 32>"
+datasource_encryption_key  = "<generar con: openssl rand -base64 32>"
+llm_encryption_key         = "<generar con: openssl rand -base64 32>"
+
+# Opcionales, dejar en blanco si no se van a probar en preprod:
+# frontend_url               = ""
+# google_client_id           = ""
+# google_client_secret       = ""
+# google_redirect_url        = ""
+# google_sheets_redirect_url = ""
