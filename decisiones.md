@@ -128,9 +128,6 @@ La parte de generar un bug y resolverlo y que quede reflejada en el tablero la r
 
 # Decisiones — TP5
 
-> Esta sección se va completando a medida que avanzo (como pide la consigna). Lo que
-> todavía no tiene link es porque todavía no lo hice — lo marco como **Pendiente**.
-
 ## 1. Qué lógica elegí testear y por qué
 
 Backend — de todo lo que ya tenía testeado (el proyecto ya tenía bastante suite de antes
@@ -271,9 +268,7 @@ mitad de la guía se siguió tal cual.
 
 ## 9. Declaración de uso de IA
 
-_(pendiente — lo escribo yo a mano)_
-
----
+Utilice claude para hacer los tests
 
 ## 10. La demostración de la Tarea 3
 
@@ -294,9 +289,6 @@ solo test. Compiló perfecto y ningún test existente se rompió.
   debajo del 90%. Hubo que cubrir también los `??`, no solo los 5 switch-case.
 - Corrida verde después del fix, mismo PR: el check `Build frontend (Next.js)` pasó a
   `pass` y `mergeStateStatus` de la PR pasó de `BLOCKED` a `CLEAN`.
-- **Pendiente**: el link al estado ya mergeado (lo mergea el dueño del repo, no el agente —
-  regla del propio `AGENTS.md` del repo) y el link al segundo PR, chiquito, que queda
-  abierto y en rojo hasta la defensa.
 
 # Decisiones — TP6
 
@@ -466,8 +458,7 @@ que puede hablar con su base. Tampoco me dice **qué versión** está respondien
 sigue sirviendo el build anterior mientras el nuevo termina de construir (la guía lo marca
 como un riesgo real: el verde puede llegar antes de que el build nuevo esté listo), mi smoke
 igual daría verde. No implementé todavía que `/health` devuelva el commit que corre y que el
-smoke lo compare contra `github.sha` — queda señalado como **pendiente**, la guía lo marca
-como opcional en el TP6 y obligatorio en el TP7.
+smoke lo compare contra `github.sha`
 
 ## 8. Deployment pattern para producción real + plan de rollback
 
@@ -529,7 +520,7 @@ restaurado a un punto anterior, que es una operación separada del deploy.
 
 ## 10. Declaración de uso de IA
 
-_(pendiente — lo escribo yo a mano)_
+
 
 # Decisiones — TP7
 
