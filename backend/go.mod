@@ -1,6 +1,6 @@
 module github.com/Max20050/docuwave
 
-go 1.24.0
+go 1.26.0
 
 require (
 	github.com/go-pdf/fpdf v0.9.0
@@ -9,7 +9,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/joho/godotenv v1.5.1
 	github.com/xuri/excelize/v2 v2.9.1
-	golang.org/x/crypto v0.38.0
+	golang.org/x/crypto v0.58.0
 	golang.org/x/oauth2 v0.30.0
 )
 
@@ -24,7 +24,7 @@ require (
 	github.com/tiendc/go-deepcopy v1.6.0 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.1 // indirect
-	golang.org/x/net v0.40.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
