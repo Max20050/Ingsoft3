@@ -27,8 +27,12 @@ func main() {
 
 	// An empty Dsn makes the SDK a no-op, so this stays silent (not Fatal)
 	// everywhere SENTRY_DSN isn't set: local dev, tests, QA.
+	// EnableTracing is not implied by TracesSampleRate: without it sentry-go
+	// drops every transaction before sending, so Issues would work but
+	// Performance would stay empty.
 	if err := sentry.Init(sentry.ClientOptions{
 		Dsn:              os.Getenv("SENTRY_DSN"),
+		EnableTracing:    true,
 		TracesSampleRate: 1.0,
 	}); err != nil {
 		log.Printf("sentry init failed: %v", err)
