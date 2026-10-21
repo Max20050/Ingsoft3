@@ -137,7 +137,7 @@ func main() {
 	recipientHandlers := recipient.NewHandlers(recipientStore, recipientGroups)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	healthHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := pool.Ping(r.Context()); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -147,7 +147,11 @@ func main() {
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}
-	})
+	}
+	// UptimeRobot (free plan) pings with HEAD, not GET, so the external monitor
+	// needs both methods registered to get a 200 instead of a 405.
+	mux.HandleFunc("GET /health", healthHandler)
+	mux.HandleFunc("HEAD /health", healthHandler)
 	mux.HandleFunc("POST /api/auth/register", authHandlers.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandlers.Login)
 	mux.HandleFunc("GET /api/me", authHandlers.RequireAuth(authHandlers.Me))
