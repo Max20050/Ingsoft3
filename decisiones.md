@@ -475,20 +475,35 @@ de los resúmenes de IA con un grupo chico antes de prenderlo para todos.
 **Plan de rollback actual**, paso a paso: (1) identificar el commit bueno anterior —
 `gh api 'repos/.../deployments?environment=production' --jq '.[0].sha'` me da el que está
 live, el anterior lo saco de `git log` o de la release previa; (2) disparar los mismos dos
-hooks de PROD con `&ref=<ese-sha>` (no hace falta aprobación de GitHub para esto: ya no pasa
-por el workflow, es un `curl` directo — lo cual es en sí mismo una limitación: el rollback de
-emergencia *evita* el gate humano a propósito, para no tener que esperar un run completo);
-(3) esperar en Render → `ingsoft3-api-prod`/`ingsoft3-front-prod` → **Deploys** a que ese
-commit figure como **live**, no fiarme del `/health` (contestaría verde con la versión que
-estoy revirtiendo).
+hooks de PROD con `&imgURL=ghcr.io/.../sha-<ese-sha>` (no `&ref=`: desde el TP7 los cuatro
+servicios de Render son **Existing Image**, no repo-based, así que `ref` devuelve `400 Bad
+Request: cannot use ref with a non-repo-based service` — lo comprobé al intentar el rollback
+real de este punto. El `imgURL` apunta a una imagen que el pipeline ya construyó y publicó en
+`ghcr.io` en el push original a `main`, así que el rollback no espera ningún build nuevo, sólo
+re-apunta el servicio a un tag que ya existe. No hace falta aprobación de GitHub para esto: ya
+no pasa por el workflow, es un `curl` directo — lo cual es en sí mismo una limitación: el
+rollback de emergencia *evita* el gate humano a propósito, para no tener que esperar un run
+completo); (3) esperar en Render → `ingsoft3-api-prod`/`ingsoft3-front-prod` → **Deploys** a
+que ese commit figure como **live**, no fiarme del `/health` (contestaría verde con la versión
+que estoy revirtiendo).
 
-**Pendiente**: todavía no ejecuté un rollback real para medir el tiempo — lo que tengo es el
-plan y el comando, no el número cronometrado que pide la Tarea 6 (la guía es explícita: tiene
-que ser medido, no estimado). Lo voy a hacer antes de la defensa y voy a completar este punto
-con la hora de inicio y la hora de *live* que muestre Render. Lo que el rollback de código
-**no** deshace, en cualquier caso: si llegara a desplegar una migración que borra o altera una
-columna, revertir el código no recupera esos datos — para eso haría falta un backup de Neon
-restaurado a un punto anterior, que es una operación separada del deploy.
+**Rollback medido** (ejecutado el 21/10/2026, antes de la defensa): revertí
+`ingsoft3-api-prod` e `ingsoft3-front-prod` del commit que estaba *live* (`1f9f07f`) al commit
+inmediato anterior (`ddc196b`, con imagen ya publicada en `ghcr.io` porque cada push a `main`
+la construye) disparando los dos hooks con `&imgURL=...sha-ddc196b...`. Elegí el commit
+inmediato anterior, y no uno de un TP viejo, a propósito: la imagen ya estaba construida y no
+corre riesgo de desajuste de esquema contra la base actual — lo que esta prueba mide es el
+mecanismo de rollback, no una migración rota (ese caso queda cubierto más abajo). **Tiempo
+total, desde el `curl` hasta que los dos servicios mostraron `ddc196b` como Live en Render →
+Deploys: 10,5 segundos.** Volver a la versión original (`1f9f07f`) con el mismo mecanismo
+tardó lo mismo: **10,5 segundos**. El número confirma lo que dice el párrafo anterior: un
+rollback de emergencia en este pipeline no es "esperar un build", es sólo cambiar qué tag ya
+existente sirve el servicio — por eso son segundos y no minutos.
+
+Lo que el rollback de código **no** deshace, en cualquier caso: si llegara a desplegar una
+migración que borra o altera una columna, revertir el código no recupera esos datos — para eso
+haría falta un backup de Neon restaurado a un punto anterior, que es una operación separada del
+deploy.
 
 ## 9. Problemas encontrados y cómo los resolví
 
@@ -520,7 +535,8 @@ restaurado a un punto anterior, que es una operación separada del deploy.
 
 ## 10. Declaración de uso de IA
 
-
+Utilice la IA para integrar nginx al codigo actual. Como tambien para hacer debuging de los problemas que me fui encontrando.
+Tambien hice uso de ella para planificar y organizar el trabajo. Tal como hice con todos los tps.
 
 # Decisiones — TP7
 
