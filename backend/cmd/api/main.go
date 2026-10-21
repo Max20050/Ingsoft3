@@ -6,7 +6,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
@@ -21,6 +24,16 @@ import (
 
 func main() {
 	_ = godotenv.Load("../../.env")
+
+	// An empty Dsn makes the SDK a no-op, so this stays silent (not Fatal)
+	// everywhere SENTRY_DSN isn't set: local dev, tests, QA.
+	if err := sentry.Init(sentry.ClientOptions{
+		Dsn:              os.Getenv("SENTRY_DSN"),
+		TracesSampleRate: 1.0,
+	}); err != nil {
+		log.Printf("sentry init failed: %v", err)
+	}
+	defer sentry.Flush(2 * time.Second)
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -202,8 +215,10 @@ func main() {
 		port = "8080"
 	}
 
+	sentryHandler := sentryhttp.New(sentryhttp.Options{Repanic: true})
+
 	log.Printf("server listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, withCORS(mux)); err != nil {
+	if err := http.ListenAndServe(":"+port, sentryHandler.Handle(withCORS(mux))); err != nil {
 		log.Fatal(err)
 	}
 }

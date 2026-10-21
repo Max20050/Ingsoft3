@@ -1,8 +1,9 @@
 module github.com/Max20050/docuwave
 
-go 1.24.0
+go 1.25.0
 
 require (
+	github.com/getsentry/sentry-go v0.50.0
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -25,6 +26,7 @@ require (
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.1 // indirect
 	golang.org/x/net v0.40.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 )
