@@ -843,3 +843,48 @@ mis propias cuentas — Claude propuso el fix leyendo el mensaje de error textua
 Terraform en cada caso, nunca a ciegas. La verificación end-to-end (los tres `curl` de la
 Tarea 5) la corrí yo mismo contra las URLs reales que devolvió `terraform output`, no son
 datos inventados.
+
+# Decisiones — TP9
+
+## 1. Qué actualizaba el PR de Dependabot que mergeé, y por qué me animé
+
+De las 14 PRs que Dependabot abrió a los pocos minutos de mergear `dependabot.yml`, mergeé
+la de `github.com/go-sql-driver/mysql` (1.10.0 → 1.10.1, PR #36). La elegí por tres motivos:
+
+- Es una dependencia **directa y realmente usada** (`backend/internal/datasource/mysql_connector.go`
+  la usa como driver del conector MySQL de las fuentes de datos), no una transitiva de
+  relleno.
+- Es un **patch** de SemVer: el changelog oficial solo lista dos bugfixes (`FormatDSN`
+  perdía el `Addr` cuando `Net` quedaba vacío, e interpolaba un `json.RawMessage` nulo como
+  string vacío en vez de `NULL`) — ningún breaking change.
+- El CI corrió completo y en verde (`Build backend (Go)` y `Build frontend (Next.js)`) sobre
+  la PR antes de mergear.
+
+Las otras 13 las cerré sin mergear, por dos razones distintas:
+
+- **3 de ellas** (`golang.org/x/oauth2`, `golang.org/x/crypto`, `github.com/jackc/pgx/v5`)
+  tenían el CI en rojo con el mismo error: `go.mod requires go >= 1.26.0 (running go
+  1.24.13; GOTOOLCHAIN=local)`. No es un problema de la dependencia en sí, es que la versión
+  nueva exige una versión de Go que mi pipeline todavía no tiene instalada — quedan para
+  cuando actualice la imagen de Go del CI.
+- **1 de ellas** (`@vitest/coverage-v8` 3.2.7 → 5.0.5) rompía `npm ci` con un conflicto de
+  peer dependency: pedía `vitest@5.0.5` pero el proyecto sigue en `vitest@3.2.7` — Dependabot
+  no bumpeó los dos paquetes juntos.
+- **Las 9 restantes** (actions de CI, `eslint`, `typescript`, `react`, etc.) tenían el CI en
+  verde, pero las cerré igual: el TP9 solo exige una PR de Dependabot mergeada y analizada,
+  no las 14. Dependabot las va a volver a proponer en su corrida semanal si siguen vigentes.
+
+## 2. Monitor externo: tiempo de detección y uso real
+
+*(pendiente — se completa después de §3.4 y §3.5 de la guía: el par DOWN/UP del monitor y la
+tabla de operaciones de Sentry)*
+
+## 3. Problemas encontrados y declaración de uso de IA
+
+Usé Claude Code (Sonnet 5) para escribir `.github/dependabot.yml`, el fix de `/health` para
+aceptar `HEAD` (necesario porque UptimeRobot free pregunta con ese método) y para analizar
+las 14 PRs que abrió Dependabot — le pedí que leyera el changelog real de cada paquete y el
+log de cada corrida de CI en vez de asumir por qué fallaban, y confirmé yo mismo contra
+`go.mod`/`package.json` cuáles dependencias eran directas y realmente usadas antes de
+decidir cuál mergear. El mergeo de la PR #36 lo hice yo a mano desde GitHub — Claude no
+mergea pull requests en este repo.
