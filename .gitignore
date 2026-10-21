@@ -23,6 +23,14 @@ frontend/node_modules/
 frontend/playwright-report/
 frontend/test-results/
 
+# Terraform (TP8, infra/) — .terraform.lock.hcl SI se commitea
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars
+infra/crash.log
+infra/crash.*.log
+
 # OS
 .DS_Store
 Thumbs.db

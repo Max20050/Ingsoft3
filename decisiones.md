@@ -728,3 +728,118 @@ Verifiqué cada pieza antes de darla por buena: corrí las 6 pruebas contra mi p
 con `curl` directo contra las URLs de QA (comparando headers de `/` contra `/api/me`, y
 probando el manifest del registry sin autenticación) antes de tocar la plantilla de nginx —
 en ningún caso apliqué un fix a ciegas esperando que el próximo deploy lo confirmara.
+
+# Decisiones — TP8
+
+## Enlaces de este TP8
+
+- **PR**: _completar con el link una vez abierto_
+- **Release**: _completar con el link a `v8.0.0` una vez taggeado_
+- `preprod` es efímero por diseño: se destruye al cerrar cada sesión de trabajo, así que no
+  hay una URL viva para linkear acá como en los TPs anteriores — la evidencia es la corrida
+  de la Tarea 5 (abajo) y lo que se muestre en vivo en la defensa oral.
+
+## 1. Por qué Terraform + Neon/Render, y no Plan C ni Azure/Bicep
+
+Ya tengo cuenta en los dos servicios desde el TP6 (QA y PROD corren ahí), así que es el
+camino que no agrega infraestructura nueva para aprender ni cuentas nuevas que crear: el
+riel canónico de la guía calca exactamente mi stack real. Plan C (Docker local) y
+Azure/Bicep quedaron como alternativas sólo para el caso de que el free tier de alguno de
+los dos fallara — no hizo falta: los tres recursos de `preprod` se crearon al primer intento
+una vez resueltos los tres problemas de la Tarea 5.
+
+## 2. Qué declara `infra/`, y qué deliberadamente no toca
+
+`infra/main.tf` crea un proyecto Neon (`ingsoft3-preprod`, rama `preprod`) y dos
+`render_web_service` (`ingsoft3-api-preprod`, `ingsoft3-front-preprod`) corriendo la misma
+imagen de `ghcr.io` que ya está promovida a QA, fijada por `var.image_tag`. No declara nada
+de QA ni de PROD — esos siguen 100% manejados por los deploy hooks de `ci.yml`, a propósito:
+mezclarlos en el mismo state hubiera significado que un `terraform destroy` de prueba
+pudiera llevarse por delante producción real. Versiones de los providers fijadas en
+`required_providers` (`kislerdm/neon` 0.18.0, `render-oss/render` 1.9.1) y en
+`.terraform.lock.hcl`, que sí se commitea (el estado, no: `*.tfstate*` y `*.tfvars` están en
+`.gitignore`).
+
+## 3. Por qué no hay `neon_role`/`neon_database` sueltos
+
+El `neon_project` ya permite nombrar el branch, la base y el rol por defecto con su propio
+bloque `branch`, y expone `database_host`/`database_user`/`database_password`/
+`database_name` como atributos de sólo lectura de ese branch por defecto. Agregar
+`neon_role`/`neon_database` aparte hubiera sido declarar dos recursos más para terminar
+necesitando exactamente los mismos atributos que el proyecto ya da solo.
+
+## 4. La dependencia circular entre `BACKEND_URL` y `FRONTEND_URL`, y por qué resolverla con una variable opcional no cuesta nada
+
+`front` necesita la URL de `api` para armar `BACKEND_URL` (nginx la usa en cada pedido a
+`/api/`), pero si `api` a su vez necesitara la URL de `front` para `FRONTEND_URL`, sería una
+dependencia circular que Terraform no puede resolver — ninguno de los dos podría crearse
+primero. La rompí haciendo que la dependencia sea de un solo sentido: `front` depende de
+`api.url`, y `FRONTEND_URL` del backend quedó como variable opcional (default `""`).
+
+A primera vista parece un trade-off (el backend cae a `http://localhost:3000` para el
+header CORS si no se la paso a mano después del primer `apply`), pero no lo es: revisando
+`frontend/lib/api.ts` y el `Dockerfile` del front, el browser nunca le habla al dominio del
+backend directo. `NEXT_PUBLIC_API_URL` queda en `""` en build time (`ci.yml` no la pasa como
+build-arg, ni en QA, ni en PROD, ni en preprod), así que el JS del front pide rutas
+**relativas** (`/api/...`) contra su propio dominio — es nginx, server-to-server, quien
+reenvía a `BACKEND_URL`. CORS es un chequeo que hace el *browser* cuando el JS de una página
+pide un recurso de **otro** origen; acá eso nunca pasa, porque desde el punto de vista del
+browser todo es same-origin contra el front. Por eso `FRONTEND_URL` del backend no afecta
+ninguna funcionalidad real ni en preprod ni en QA/PROD hoy — lo confirmé con el mismo `curl`
+que prueba la cadena completa en la Tarea 5 (el `401` de `/api/recipients` ya pasa por
+`front → nginx → BACKEND_URL → api` sin que `FRONTEND_URL` esté seteado).
+
+## 5. Problemas encontrados y cómo los resolví
+
+Tres problemas reales, los tres aparecieron recién corriendo contra las cuentas reales de
+Neon/Render — ninguno estaba en la documentación que leí de los providers antes de escribir
+`main.tf`:
+
+- **`org_id is required`** (`terraform apply`, al crear `neon_project`). La cuenta de Neon
+  está organizada por organización y el provider no lo infiere solo — tampoco estaba
+  documentado como requerido. Agregué `neon_org_id` como variable nueva y lo pasé a
+  `org_id` en el recurso.
+- **`invalid ownerID`** (`terraform apply`, al crear `render_web_service.api`). El
+  `RENDER_OWNER_ID` que exporté no correspondía a un owner válido para la API — lo resolví
+  pegándole a `GET /v1/owners` con el mismo `RENDER_API_KEY` y usando el `id` real que
+  devolvió, en vez de un ID que había copiado de otro lado.
+
+Con los tres resueltos, el `apply` creó los 3 recursos sin más vueltas. Verifiqué la cadena
+completa antes de dar el entorno por bueno, no me conformé con que `terraform apply` saliera
+en verde:
+- `GET {api_url}/health` → `200`, directo contra el backend (prueba que levantó y conectó a
+  Neon: si no pudiera conectar, el propio `main.go` hace `log.Fatal` antes de abrir el
+  puerto).
+- `GET {front_url}/api/health` → `404` del propio backend Go (se nota por el `404 page not
+  found` de `http.ServeMux` y el header `access-control-allow-origin` que pone mi middleware
+  `withCORS`) — esperable, no es un bug: `/health` no vive bajo `/api/`, nginx reenvía la
+  ruta tal cual.
+- `GET {front_url}/api/recipients` → `401 {"error":"missing bearer token"}` — esta es la
+  prueba real de que `front → nginx → BACKEND_URL → api` funciona de punta a punta: es la
+  respuesta de mi middleware de auth, no un 404 ni un error de proxy, llegando a través del
+  servicio del frontend.
+
+## 6. Disciplina operativa del free tier
+
+Las 750 hs/mes del free tier de Render se reparten entre **todo** el workspace, no por
+servicio — con `preprod` arriba son 2 servicios más compitiendo por esas horas junto a los 2
+de QA y los 2 de PROD. Por eso el entorno no queda corriendo entre sesiones: se destruye con
+`terraform destroy` apenas termino de probarlo, y antes de la defensa oral tiene que estar
+destruido — si llegara vivo, el `apply` en vivo frente al docente mostraría "No changes",
+que es exactamente lo que no quiero mostrar.
+
+## 7. Declaración de uso de IA
+
+Usé Claude Code (Sonnet 5) para escribir `infra/` completo. Antes de escribir una sola línea
+de HCL, le pedí que leyera la documentación real de los dos providers (`kislerdm/neon`
+0.18.0 y `render-oss/render` 1.9.1) directamente de sus repos en GitHub en vez de adivinar
+los nombres de atributos, y que confirmara contra mi código real (`backend/cmd/api/main.go`,
+`frontend/docker-entrypoint.sh`, `frontend/nginx/default.conf.template`) cuáles variables de
+entorno hacían falta de verdad — la guía del TP está escrita contra una app .NET de ejemplo
+que no comparte ni los nombres de variables (`ConnectionStrings__Default` vs. mi
+`DATABASE_URL`) ni la lógica de `PORT`/`DNS_RESOLVER` de mi `nginx`. Los tres
+problemas reales de la Tarea 5 los diagnostiqué yo corriendo `terraform plan`/`apply` contra
+mis propias cuentas — Claude propuso el fix leyendo el mensaje de error textual de
+Terraform en cada caso, nunca a ciegas. La verificación end-to-end (los tres `curl` de la
+Tarea 5) la corrí yo mismo contra las URLs reales que devolvió `terraform output`, no son
+datos inventados.
