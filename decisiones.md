@@ -876,8 +876,24 @@ Las otras 13 las cerré sin mergear, por dos razones distintas:
 
 ## 2. Monitor externo: tiempo de detección y uso real
 
-*(pendiente — se completa después de §3.4 y §3.5 de la guía: el par DOWN/UP del monitor y la
-tabla de operaciones de Sentry)*
+Monitor de UptimeRobot sobre `https://ingsoft3-api-prod-hb4s.onrender.com/health`, intervalo
+5 minutos. Caída provocada con *Suspend* del servicio de PROD en Render:
+
+- **12:21** — suspendí el servicio.
+- **12:24** — llegó el email de **DOWN** (3 minutos para detectar la caída).
+- **12:25** — reanudé el servicio.
+- **12:29** — llegó el email de **UP** (4 minutos para confirmar la recuperación).
+- UptimeRobot reporta **5 m 3 s** de duración total del incidente (medido desde su propio
+  primer chequeo en rojo hasta el primero en verde, no desde que yo apreté los botones).
+
+Un usuario real en un sábado a la madrugada no me habría avisado en 3 minutos — el incidente
+del enunciado del TP (40 minutos hasta que alguien avisó por Instagram) es la comparación
+que importa: el monitor corta esa espera a minutos, no a horas.
+
+Monitor pausado apenas confirmé el par DOWN/UP, para no gastar las 750 hs/mes de Render.
+
+*(La parte de uso real — operación más usada y más lenta — se completa cuando termine la
+integración de Sentry, §3.5 de la guía.)*
 
 ## 3. Problemas encontrados y declaración de uso de IA
 
