@@ -73,6 +73,7 @@ func (h *GoogleHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   int((10 * time.Minute).Seconds()),
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 	http.Redirect(w, r, h.google.oauth.AuthCodeURL(state), http.StatusFound)
@@ -86,7 +87,10 @@ func (h *GoogleHandlers) Callback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid oauth state")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{
+		Name: oauthStateCookie, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+	})
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
