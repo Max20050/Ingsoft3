@@ -83,7 +83,7 @@ jobs:
 
       - name: Actualizar badge de cobertura (gist)
         if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        uses: schneegans/dynamic-badges-action@v1.7.0
+        uses: schneegans/dynamic-badges-action@v1.9.0
         with:
           auth: ${{ secrets.GIST_SECRET }}
           gistID: b3a3805ef1a1702baeeb0cbc9716b39b
