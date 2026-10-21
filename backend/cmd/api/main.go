@@ -165,6 +165,11 @@ func main() {
 	// needs both methods registered to get a 200 instead of a 405.
 	mux.HandleFunc("GET /health", healthHandler)
 	mux.HandleFunc("HEAD /health", healthHandler)
+	// TODO(TP9): endpoint temporal para ver un error llegar a Sentry
+	// (TP9 §3.5, tarea 5). Sacar antes de cerrar el practico.
+	mux.HandleFunc("GET /api/falla", func(w http.ResponseWriter, r *http.Request) {
+		panic("falla de prueba del TP9")
+	})
 	mux.HandleFunc("POST /api/auth/register", authHandlers.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandlers.Login)
 	mux.HandleFunc("GET /api/me", authHandlers.RequireAuth(authHandlers.Me))
