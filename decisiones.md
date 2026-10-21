@@ -892,8 +892,16 @@ que importa: el monitor corta esa espera a minutos, no a horas.
 
 Monitor pausado apenas confirmé el par DOWN/UP, para no gastar las 750 hs/mes de Render.
 
-*(La parte de uso real — operación más usada y más lenta — se completa cuando termine la
-integración de Sentry, §3.5 de la guía.)*
+**Uso real (Sentry, back → Dashboards → Backend Overview → Transactions, proyecto
+`ingsoft3-backend`):**
+
+- **Operación más usada**: `GET /api/datasources`, TPM 0,0146/min (la más alta de toda la
+  tabla; 624,87ms acumulados de *Time Spent*).
+- **Operación más lenta**: `GET /api/reports`, P95 135,99ms (contra 86,97ms de
+  `/api/datasources`, la segunda más usada — construir el reporte hace más trabajo que listar
+  fuentes).
+- **Error**: `falla de prueba del TP9` (el `panic()` de `/api/falla`), 18 ocurrencias, 0
+  usuarios reales afectados — esperable, lo generé yo a propósito.
 
 ## 3. Problemas encontrados y declaración de uso de IA
 
@@ -904,3 +912,27 @@ log de cada corrida de CI en vez de asumir por qué fallaban, y confirmé yo mis
 `go.mod`/`package.json` cuáles dependencias eran directas y realmente usadas antes de
 decidir cuál mergear. El mergeo de la PR #36 lo hice yo a mano desde GitHub — Claude no
 mergea pull requests en este repo.
+
+**El problema más largo del TP fue Sentry en producción, por dos bugs distintos:**
+
+1. **`EnableTracing` no está implícito en `TracesSampleRate`.** Con `TracesSampleRate: 1.0`
+   solo, los errores llegaban bien a *Issues* pero el dashboard de *Performance* decía "Get
+   started with backend tracing" — cero datos. Claude leyó el código fuente de `sentry-go`
+   (no la documentación) y encontró que el SDK descarta toda transacción si
+   `ClientOptions.EnableTracing` no está explícitamente en `true`, sin importar el sample
+   rate. Un flag separado, no documentado de forma obvia.
+2. **Un rollback manual en Render nos devolvió una imagen de TP6.** Al arreglar el primer
+   problema (nginx corriendo sin el wrapper, por otro redeploy manual) usé el único rollback
+   que Render ofrecía en su historial corto, y resultó ser una imagen de antes de que
+   sacáramos el `proxy_set_header Host $host;` del bloque `/api/` de nginx (ese header le
+   hace creer a Render que el pedido es para el *front*, y lo termina enrutando a otra app
+   que valida un campo "nombre" inexistente en la nuestra — contra eso estuve un buen rato
+   comparando headers CORS y timings entre pegarle directo al backend y pegarle a través del
+   front hasta encontrar la diferencia). Se resolvió re-disparando el job `Deploy a PROD` del
+   pipeline normal (no tocando nada a mano en Render), que vuelve a desplegar la imagen del
+   commit correcto.
+
+Los diagnostiqué yo mismo comparando respuestas reales (`curl` directo al backend vs. a
+través del front, con y sin headers CORS, P95 de cada lado) — Claude propuso cada hipótesis
+a partir de esa evidencia, nunca a ciegas, y yo confirmé cada una contra el dashboard de
+Render/Sentry antes de aceptarla.
