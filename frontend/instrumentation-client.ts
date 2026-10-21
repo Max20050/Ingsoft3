@@ -4,7 +4,7 @@ import * as Sentry from "@sentry/nextjs";
 // fine to ship in a public repo's client bundle (TP9 §3.5) — unlike the
 // backend's SENTRY_DSN, which travels by environment variable.
 Sentry.init({
-  dsn: "TODO_FRONT_DSN",
+  dsn: "https://d80259298b197662c0adb3bcabee2319@o4512292123705344.ingest.us.sentry.io/4512292137730048",
   environment: typeof window !== "undefined" ? window.location.hostname : "unknown",
   integrations: [Sentry.browserTracingIntegration()],
   tracesSampleRate: 1.0,
