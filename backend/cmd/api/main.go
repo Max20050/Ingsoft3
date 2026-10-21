@@ -6,7 +6,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryhttp "github.com/getsentry/sentry-go/http"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
@@ -21,6 +24,20 @@ import (
 
 func main() {
 	_ = godotenv.Load("../../.env")
+
+	// An empty Dsn makes the SDK a no-op, so this stays silent (not Fatal)
+	// everywhere SENTRY_DSN isn't set: local dev, tests, QA.
+	// EnableTracing is not implied by TracesSampleRate: without it sentry-go
+	// drops every transaction before sending, so Issues would work but
+	// Performance would stay empty.
+	if err := sentry.Init(sentry.ClientOptions{
+		Dsn:              os.Getenv("SENTRY_DSN"),
+		EnableTracing:    true,
+		TracesSampleRate: 1.0,
+	}); err != nil {
+		log.Printf("sentry init failed: %v", err)
+	}
+	defer sentry.Flush(2 * time.Second)
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -152,6 +169,11 @@ func main() {
 	// needs both methods registered to get a 200 instead of a 405.
 	mux.HandleFunc("GET /health", healthHandler)
 	mux.HandleFunc("HEAD /health", healthHandler)
+	// TODO(TP9): endpoint temporal para ver un error llegar a Sentry
+	// (TP9 §3.5, tarea 5). Sacar antes de cerrar el practico.
+	mux.HandleFunc("GET /api/falla", func(w http.ResponseWriter, r *http.Request) {
+		panic("falla de prueba del TP9")
+	})
 	mux.HandleFunc("POST /api/auth/register", authHandlers.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandlers.Login)
 	mux.HandleFunc("GET /api/me", authHandlers.RequireAuth(authHandlers.Me))
@@ -202,8 +224,10 @@ func main() {
 		port = "8080"
 	}
 
+	sentryHandler := sentryhttp.New(sentryhttp.Options{Repanic: true})
+
 	log.Printf("server listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, withCORS(mux)); err != nil {
+	if err := http.ListenAndServe(":"+port, sentryHandler.Handle(withCORS(mux))); err != nil {
 		log.Fatal(err)
 	}
 }
