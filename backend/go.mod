@@ -1,6 +1,6 @@
 module github.com/Max20050/docuwave
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/getsentry/sentry-go v0.50.0
@@ -11,7 +11,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/xuri/excelize/v2 v2.9.1
 	golang.org/x/crypto v0.38.0
-	golang.org/x/oauth2 v0.30.0
+	golang.org/x/oauth2 v0.38.0
 )
 
 require (
